@@ -112,11 +112,12 @@ try {
   const mobile = await mobileContext.newPage();
   const mobileMon = monitor(mobile);
   await mobile.goto(env.baseUrl + "/", { waitUntil: "domcontentloaded" });
+  await mobile.getByRole("link", {name:"留下你的名字"}).click();
   await mobile.waitForSelector("input#name");
 
   await test("E2E-01", "手机签到页正常加载，无横向溢出与控制台异常", async () => {
     const h1 = (await mobile.locator("h1").first().innerText()).replace(/\s+/g, "");
-    assert(h1 === "InkField." && (await mobile.locator(".poster-event").innerText()) === "AI Coding Hackathon", `标题异常: ${h1}`);
+    assert(h1 === "留下你的名字" && await mobile.getByRole("link", {name:"返回活动入口"}).isVisible(), `标题异常: ${h1}`);
     assert(await mobile.locator("input#name").isVisible(), "姓名输入框不可见");
     assert((await mobile.locator(".font-card").count()) >= 1, "字体卡片未渲染");
     const overflow = await mobile.evaluate(() => ({
@@ -155,7 +156,7 @@ try {
   await test("E2E-03", "手机端提交签到成功并写入后端", async () => {
     const name = "林小满";
     const before = (await api(env, "/api/state")).data.signatures.length;
-    await mobile.locator("button.primary", { hasText: "确认签到" }).click();
+    await mobile.locator("button.primary", { hasText: "确认签名" }).click();
     await mobile.waitForSelector("main.success", { timeout: 15000 });
     const h1 = await mobile.locator("main.success h1").innerText();
     assert(h1.trim() === name, `成功页姓名 ${h1}`);
@@ -267,20 +268,21 @@ try {
   });
 
   await test("E2E-08", "管理员暂停签到：手机端按钮禁用，接口拒绝写入", async () => {
-    await admin.locator(".controls button", { hasText: "暂停签到" }).click();
+    await admin.locator(".controls button", { hasText: "暂停署名" }).click();
     await admin.waitForFunction(
       () => document.querySelector(".toast")?.textContent?.includes("操作已保存"),
       null,
       { timeout: 6000 },
     );
     await mobile.goto(env.baseUrl + "/", { waitUntil: "domcontentloaded" });
+    await mobile.getByRole("link", {name:"留下你的名字"}).click();
     await mobile.waitForSelector("button.primary");
-    await waitFor(async () => (await mobile.locator("button.primary").innerText()).includes("签到暂未开放"), 6000);
+    await waitFor(async () => (await mobile.locator("button.primary").innerText()).includes("署名暂未开放"), 6000);
     const disabled = await mobile.locator("button.primary").isDisabled();
     assert(disabled, "暂停后签到按钮仍可点击");
     const blocked = await createSignature(env, "暂停测试");
     assert(blocked.status === 409, `暂停时接口返回 ${blocked.status}`);
-    await admin.locator(".controls button", { hasText: "开启签到" }).click();
+    await admin.locator(".controls button", { hasText: "开启署名" }).click();
     await waitFor(async () => {
       const r = await api(env, "/api/state");
       return r.data.eventStatus === "open";

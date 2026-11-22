@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import {
@@ -9,6 +9,7 @@ import {
   overlaps,
   REPORTS,
 } from "./lib/env.mjs";
+mkdirSync(REPORTS, { recursive: true });
 const env = await createEnv();
 const browser = await chromium.launch({
   headless: true,
@@ -24,11 +25,12 @@ try {
   });
   await wall.goto(env.baseUrl + "/wall");
   await phone.goto(env.baseUrl);
+  await phone.getByRole("link", {name:"留下你的名字"}).click();
   await phone.locator("#name").fill("林龘");
   await phone.waitForSelector(".coverage");
   report.rareGlyph = await phone.locator(".coverage").innerText();
   await phone.locator("#name").fill("江安校区十二字符签名压力");
-  await phone.getByRole("button", { name: "确认签到" }).click();
+  await phone.getByRole("button", { name: "确认签名" }).click();
   await phone.waitForSelector("main.success");
   const sig = (await api(env, "/api/state")).data.signatures[0];
   assert.equal(sig.split_at, 6);
@@ -66,7 +68,7 @@ try {
   await admin.getByPlaceholder("搜索姓名").fill("江安");
   assert.equal(await admin.locator(".records article").count(), 1);
   const d = admin.waitForEvent("download");
-  await admin.getByRole("button", { name: "导出签到记录" }).click();
+  await admin.getByRole("button", { name: "导出署名记录" }).click();
   const savedFile = join(env.dir, "records.csv");
   await (await d).saveAs(savedFile);
   const csv = readFileSync(savedFile, "utf8");
@@ -91,7 +93,7 @@ try {
     ),
   );
   report.concurrentPosts = created.length;
-  await admin.getByRole("button", { name: "清空全部签到" }).click();
+  await admin.getByRole("button", { name: "清空全部署名" }).click();
   await wall.waitForFunction(
     () => document.querySelectorAll(".signature").length === 0,
   );

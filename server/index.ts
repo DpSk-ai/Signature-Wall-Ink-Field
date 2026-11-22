@@ -1,6 +1,7 @@
 import { place, occupiedBounds, type Box } from "./layout.js";
 import fontIds from "./font-ids.json" with { type: "json" };
 import Fastify from "fastify";
+import { registerCheckIn } from "./check-in.js";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import staticPlugin from "@fastify/static";
@@ -237,6 +238,7 @@ if (!process.env.ADMIN_SECRET) {
     "\n⚠️  警告: 使用默认 ADMIN_SECRET,生产环境请设置环境变量 ADMIN_SECRET\n",
   );
 }
+registerCheckIn(app, db, auth, () => get("event_name"));
 app.post("/api/admin/login", (req, reply) =>
   String((req.body as any)?.password) === secret
     ? { token: sign() }
@@ -314,7 +316,7 @@ if (existsSync(join(root, "dist"))) {
     wildcard: true,
   });
   app.setNotFoundHandler((req, reply) =>
-    !["/", "/admin", "/admin/", "/wall", "/wall/"].includes(
+    !["/", "/sign", "/sign/", "/admin", "/admin/", "/wall", "/wall/"].includes(
       req.url.split("?")[0],
     )
       ? reply.code(404).send({ error: "Not found" })

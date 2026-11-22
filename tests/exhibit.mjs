@@ -55,6 +55,7 @@ try {
   observe(wall);
   await wall.goto(env.baseUrl + "/wall");
   await phone.goto(env.baseUrl);
+  await phone.getByRole("link", {name:"留下你的名字"}).click();
   await phone.locator("#name").fill("林知秋");
   await phone.waitForFunction(
     () => !document.querySelector(".primary").disabled,
@@ -116,7 +117,7 @@ try {
     "Duplicate specimen outline",
   );
   await phone.getByRole("button", { name: "笔墨", exact: true }).click();
-  await phone.getByRole("button", { name: "确认签到" }).click();
+  await phone.getByRole("button", { name: "确认签名" }).click();
   await phone.waitForSelector("main.success");
   await shot(phone, "mobile-signed.png");
   await wall.waitForSelector(".signature.writing", { timeout: 15000 });
@@ -187,11 +188,11 @@ try {
             ? "Ada " + count
             : lastNames[count % lastNames.length] + given[count % given.length];
       const f = catalog[count % catalog.length];
-      await phone.getByRole("button", { name: "继续签到" }).click();
+      await phone.getByRole("button", { name: "继续署名" }).click();
       await phone.locator("#name").fill(name);
       await phone.getByRole("button", { name: f.group, exact: true }).click();
       await phone.locator(".font-card").filter({ hasText: f.label }).click();
-      await phone.getByRole("button", { name: "确认签到" }).click();
+      await phone.getByRole("button", { name: "确认签名" }).click();
       await phone.waitForSelector("main.success");
       assert.equal(await phone.locator("main.success h1").innerText(), name);
       count++;
