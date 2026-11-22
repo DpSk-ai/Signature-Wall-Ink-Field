@@ -1,0 +1,5 @@
+jasonhandwriting/JasonHandwriting
+JasonHandwriting1.ttf
+Version 1.48
+Original file SHA256 de76a15b1e2c1a7050d061485e28195f5b682d45e37499cf730c2b8554c44cf3
+Local web subsets, renamed Ink Field Study JS. Same outlines. OFL applies to derivatives.

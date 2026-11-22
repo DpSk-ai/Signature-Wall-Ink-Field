@@ -6,3 +6,7 @@ data/
 shots/
 .env
 *.tsbuildinfo
+
+# 测试生成的截图与报告
+tests/artifacts/
+tests/reports/

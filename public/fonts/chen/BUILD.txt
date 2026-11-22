@@ -1,0 +1,5 @@
+Chenyu-otf/chenyuluoyan_thin
+ChenYuluoyan-2.0-Thin.ttf
+Version 2.100
+Original file SHA256 1289e42a6d1ec995d0cb23aee89efc69fc95749fbd54a610057a3e992dc453db
+Local web subsets, renamed Ink Field Study CY. Same outlines. OFL applies to derivatives.

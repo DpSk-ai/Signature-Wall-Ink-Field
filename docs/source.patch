@@ -1,0 +1,4246 @@
+--- a/README.md
++++ b/README.md
+@@ -1,43 +1,69 @@
+-# Signature Wall
++# 墨场 Ink Field · Signature Wall
+ 
+-四川大学 AI 黑客松实时互动签到墙，包含手机签到、大屏实时同步、SQLite 持久化、管理员控制和 4K 纪念图导出。
++TRAE on Campus @四川大学 · AI Coding Hackathon 的实时互动签到墙。手机选字签名，大屏以参与者选中的字形原位书写，管理页控制活动并导出 4K 合影。
+ 
+-## 本地运行
++## Windows 11 启动
++
++使用 64 位 Windows 11、Node.js 24 LTS x64 和随 Node 安装的 npm。完整解压 ZIP，例如放在较短的路径 `C:\Events\InkField`。在包含 `package.json` 的目录打开 PowerShell。首次安装需要网络访问 npm 和原生 SQLite 模块的预编译包，字体和笔顺数据已经随源码提供。
+ 
+ ```powershell
+-npm install
+-$env:ADMIN_SECRET="请设置强密码"
+-npm run dev
++node --version
++npm.cmd ci
++npm.cmd run build
++$env:ADMIN_SECRET = [System.Net.NetworkCredential]::new('', (Read-Host '设置本场管理员密码' -AsSecureString)).Password
++npm.cmd start
+ ```
+ 
+-- 手机签到：http://localhost:5173/
+-- 大屏：http://localhost:5173/wall
+-- 管理后台：http://localhost:5173/admin
+-- 后端健康检查：http://localhost:8787/api/health
++保留这个窗口。Fastify 在 8787 端口同时提供生产页面、API、WebSocket 和字体。管理员密码保存在当前进程环境中，每次打开新终端时重新设置；使用原密码可继续现有管理员会话。用 Ctrl+C 停止服务。
+ 
+-生产构建：
++### 接入现场网络
++
++1. 让电脑和手机连接到可互访的同一局域网。在电脑运行 `ipconfig`，找到活动网络适配器的 IPv4 地址。若现场网络启用了客户端隔离，请使用允许设备互访的活动网络。
++2. 在大屏浏览器用**电脑的局域网地址**打开墙。例如主机为 `192.168.1.20`，打开 `http://192.168.1.20:8787/wall`，按 F11 全屏。二维码指向打开这张墙时使用的源地址。若以 localhost 打开，手机扫描后会访问手机自身。
++3. 手机也可以直接打开 `http://192.168.1.20:8787/`。管理页为 `http://192.168.1.20:8787/admin`。如 Windows 首次弹出防火墙提示，允许 Node 在活动所用专用网络接入。
++4. 用一个姓名完成签到，核对手机回执、大屏笔迹与人数。管理页可暂停、恢复、重播、隐藏、搜索、导出 CSV 或 PNG。现场保留一个大屏页面打开以驱动队列。
++
++### 数据与升级
++
++默认使用 `data/signature-wall.db`。包内数据库来自附件中已提交的 WAL 页，保留了其中 5 条记录及原坐标。测试产生的参与者仅存在于验收截图和隔离测试库。需要全新场次时，可在启动前给 `$env:SIGNATURE_DATA_DIR` 设置一个新的空目录，例如 `C:\Events\SCU-Live-Data`。后续启动始终指向同一目录。
++
++迁移已有部署时，先停止该实例，完整备份原 `data` 目录（含存在的 WAL 与 SHM），将 `SIGNATURE_DATA_DIR` 指向备份副本进行核对。首次启动会按需添加两行署名的断行字段。保留姓名、字体 ID、可见性、状态、时间和坐标。后台“清空全部签到”会删除当前数据库的记录。
++
++### 开发与复测
+ 
+ ```powershell
+-npm run build
+-$env:ADMIN_SECRET="请设置强密码"
+-npm start
++npm.cmd run dev
+ ```
+ 
+-## 实现说明
++开发前端默认 5173，API 默认 8787。Vite 代理 `/api` 和 `/ws`。可用 `PORT` 设置后端端口，或设置 `HOST=127.0.0.1` 仅在本机测试。现场部署使用上面的生产启动方式。原 LAYOUT_SCALE 环境变量仍可为新署名设置字号上限（0.4–1），未设置时采用墨场的分区字号。
+ 
+-- 浏览器在字体加载后测量实际字形边界，服务端据此执行保留区避让、碰撞检测并持久化坐标。
+-- 大屏按签到顺序处理队列，姓名在最终位置逐字遮罩揭示；这是模拟书写动画，不宣称真实汉字笔顺。
+-- 刷新后从 SQLite 恢复固定布局和动画状态。
+-- 管理端支持活动状态、动画暂停/恢复、最近姓名重播、记录隐藏/恢复、单条删除、清空（二次确认）、签到记录 CSV 导出、连接数查看和 3840×2160 PNG 导出。
++```powershell
++npm.cmd run typecheck
++npm.cmd run build
++npm.cmd test
++npm.cmd run test:api
++npm.cmd run test:backend
++npx.cmd playwright install chromium
++npm.cmd run test:e2e
++npm.cmd run test:exhibit
++node tests/exhibit-controls.mjs
++```
+ 
+-## 字体状态
++浏览器测试需要先完成生产构建，随后自建临时目录、数据库和随机端口。可通过 `CHROMIUM_PATH` 指定已有兼容 Chromium 可执行文件。结果写入 `tests/reports` 与 `tests/artifacts`。字体和笔顺采用同源按需加载，浏览器测试完成后不需要 Playwright 即可运行现场服务。
+ 
+-当前开放 7 款经 Google Fonts 分发、采用 SIL OFL 1.1 的中文字体，均已验证可正常加载和渲染。
++### 常见启动问题
+ 
+-正式现场使用前建议把已核验字体文件本地化为 WOFF2，避免网络环境影响字体加载。
++- 原生数据库模块无法安装时，核对 `node -p "process.arch"` 为 `x64`，并使用 Node 24。网络无法取得预编译文件时，需要可用的 Python 与 Visual Studio C++ Build Tools 供 node-gyp 编译，再运行 `npm.cmd ci`。
++- 端口占用时，在 PowerShell 设置 `$env:PORT='8788'` 后重新启动，并使用新端口访问大屏和管理页。
++- 字库加载失败时，页面提供重试。缺少姓名所需字形时会提示补字，签名前可在画布上核对。
++- 手机签到后尚未书写时，检查大屏连接状态、后台动画开关和队列。重开大屏会从 SQLite 快照继续。
+ 
+-## 已知限制
++## 交付导航
+ 
+-- 书写效果为逐字遮罩揭示，不是真实笔顺路径动画。
+-- 当前没有自动化浏览器视觉回归；已完成 TypeScript/Vite 生产构建和 API 冒烟测试。
+-- 4K 导出依赖浏览器已经加载字体；正式版应进一步内嵌本地字体以实现完全离线导出。
++| 内容 | 路径 |
++|---|---|
++| 视觉探索与设计规范 | `docs/DESIGN.md` |
++| 字体授权、覆盖、来源和散列 | `docs/FONTS.md`、`docs/font-ledger.json`、`public/fonts/<id>/` |
++| 测试方法、失败修复与结果 | `docs/ACCEPTANCE.md`、`tests/reports/` |
++| 手机与各密度大屏截图、4K 实际导出 | `tests/artifacts/` |
++| 代码差异与完整文件变更表 | `docs/CHANGES.md`、`docs/source.patch`、`docs/changed-files.tsv` |
+--- a/index.html
++++ b/index.html
+@@ -1 +1,2 @@
+-<!doctype html><html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="solid" data-motion="on"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="page-type" content="software"/><meta name="site-kind" content="software"/><meta name="theme-color" content="#FAFAF8"/><meta name="description" content="四川大学 AI 黑客松实时互动签到墙"/><title>Signature Wall</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
++<!doctype html>
++<html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="theme-color" content="#171521"/><meta name="description" content="TRAE on Campus @四川大学 · AI Coding Hackathon 互动签到墙"/><link rel="icon" href="data:,"/><title>墨场 Ink Field · Signature Wall</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+--- a/package.json
++++ b/package.json
+@@ -1 +1,42 @@
+-{"name":"signature-wall","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"concurrently \"vite --host 0.0.0.0\" \"tsx watch server/index.ts\"","build":"tsc -b && vite build","start":"tsx server/index.ts","test":"vitest run","test:api":"node tests/api-suite.mjs","test:e2e":"node tests/e2e-suite.mjs","test:backend":"node tests/backend-regression.mjs"},"dependencies":{"@fastify/cors":"^11.1.0","@fastify/static":"^10.1.11","@fastify/websocket":"^11.2.0","better-sqlite3":"^12.4.1","fastify":"^5.6.2","qrcode":"^1.5.4","react":"^19.2.0","react-dom":"^19.2.0"},"devDependencies":{"@types/better-sqlite3":"^7.6.13","@types/node":"^24.10.1","@types/qrcode":"^1.5.5","@types/react":"^19.2.2","@types/react-dom":"^19.2.2","@vitejs/plugin-react":"^5.1.1","concurrently":"^9.2.1","playwright":"^1.65.1","tsx":"^4.20.6","typescript":"^5.9.3","vite":"^7.2.2","vitest":"^4.0.13"}}
++{
++  "name": "signature-wall",
++  "version": "1.0.0",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "dev": "concurrently --kill-others \"vite\" \"node --watch --import tsx server/index.ts\"",
++    "build": "tsc -b && vite build",
++    "start": "node --import tsx server/index.ts",
++    "test": "vitest run",
++    "test:api": "node tests/api-suite.mjs",
++    "test:e2e": "node tests/e2e-suite.mjs",
++    "test:backend": "node tests/backend-regression.mjs",
++    "typecheck": "tsc -b --force",
++    "test:exhibit": "node tests/exhibit.mjs",
++    "test:controls": "node tests/exhibit-controls.mjs"
++  },
++  "dependencies": {
++    "@fastify/cors": "^11.1.0",
++    "@fastify/static": "^10.1.11",
++    "@fastify/websocket": "^11.2.0",
++    "better-sqlite3": "^12.4.1",
++    "fastify": "^5.6.2",
++    "qrcode": "^1.5.4",
++    "react": "^19.2.0",
++    "react-dom": "^19.2.0"
++  },
++  "devDependencies": {
++    "@types/better-sqlite3": "^7.6.13",
++    "@types/node": "^24.10.1",
++    "@types/qrcode": "^1.5.5",
++    "@types/react": "^19.2.2",
++    "@types/react-dom": "^19.2.2",
++    "@vitejs/plugin-react": "^5.1.1",
++    "concurrently": "^9.2.1",
++    "playwright": "^1.65.1",
++    "tsx": "^4.20.6",
++    "typescript": "^5.9.3",
++    "vite": "^7.2.2",
++    "vitest": "^4.0.13"
++  }
++}
+--- /dev/null
++++ b/server/font-ids.json
+@@ -0,0 +1,26 @@
++[
++  "ma-shan-zheng",
++  "zhi-mang-xing",
++  "long-cang",
++  "liu-jian-mao-cao",
++  "zhuque",
++  "bpmf",
++  "lxgw-wenkai",
++  "yozai",
++  "xiaolai",
++  "iansui",
++  "huninn",
++  "child-fun",
++  "source-han-serif",
++  "zcool-xiaowei",
++  "source-han-sans",
++  "jason",
++  "chiron",
++  "maple",
++  "smiley",
++  "chen",
++  "zcool-qingke",
++  "zcool-kuaile",
++  "cubic",
++  "boutique"
++]
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -1,3 +1,5 @@
++import { place, occupiedBounds, type Box } from "./layout.js";
++import fontIds from "./font-ids.json" with { type: "json" };
+ import Fastify from "fastify";
+ import cors from "@fastify/cors";
+ import websocket from "@fastify/websocket";
+@@ -7,7 +9,7 @@
+ import { existsSync, mkdirSync } from "node:fs";
+ import { join, resolve } from "node:path";
+ const root = resolve(import.meta.dirname, ".."),
+-  dir = join(root, "data");
++  dir = process.env.SIGNATURE_DATA_DIR || join(root, "data");
+ mkdirSync(dir, { recursive: true });
+ const db = new Database(join(dir, "signature-wall.db"));
+ db.pragma("journal_mode = WAL");
+@@ -16,6 +18,15 @@
+ db.exec(
+   `CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS signatures(id TEXT PRIMARY KEY,request_id TEXT UNIQUE NOT NULL,name TEXT NOT NULL,font_id TEXT NOT NULL,x REAL NOT NULL,y REAL NOT NULL,width REAL NOT NULL,height REAL NOT NULL,size REAL NOT NULL,rotation REAL NOT NULL,status TEXT NOT NULL DEFAULT 'queued',hidden INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_signatures_request_id ON signatures(request_id);CREATE INDEX IF NOT EXISTS idx_signatures_status ON signatures(status);CREATE INDEX IF NOT EXISTS idx_signatures_hidden ON signatures(hidden);CREATE INDEX IF NOT EXISTS idx_signatures_visibility_status ON signatures(hidden,status,created_at);INSERT OR IGNORE INTO settings(key,value)VALUES('event_name','四川大学 AI 黑客松'),('event_status','open'),('animation_paused','false');`,
+ );
++if (
++  !(db.pragma("table_info(signatures)") as { name: string }[]).some(
++    (col) => col.name === "split_at",
++  )
++) {
++  db.exec(
++    "ALTER TABLE signatures ADD COLUMN split_at INTEGER NOT NULL DEFAULT 0",
++  );
++}
+ const app = Fastify({ logger: true });
+ app.addContentTypeParser(
+   "application/json",
+@@ -98,10 +109,14 @@
+ app.get("/ws", { websocket: true }, (socket) => {
+   const client: Client = { socket, alive: true };
+   clients.add(client);
++  send({ type: "connections", data: clients.size });
+   socket.on("pong", () => {
+     client.alive = true;
+   });
+-  socket.on("close", () => clients.delete(client));
++  socket.on("close", () => {
++    clients.delete(client);
++    send({ type: "connections", data: clients.size });
++  });
+   socket.on("error", () => clients.delete(client));
+   try {
+     socket.send(JSON.stringify({ type: "snapshot", data: state() }));
+@@ -109,71 +124,7 @@
+     dropClient(client);
+   }
+ });
+-type Box = { x: number; y: number; width: number; height: number };
+-const reserved: Box[] = [
+-  { x: 30, y: 20, width: 570, height: 140 },
+-  { x: 1540, y: 20, width: 350, height: 140 },
+-  { x: 1590, y: 730, width: 300, height: 320 },
+-];
+-const hit = (a: Box, b: Box, p = 18) =>
+-  a.x < b.x + b.width + p &&
+-  a.x + a.width + p > b.x &&
+-  a.y < b.y + b.height + p &&
+-  a.y + a.height + p > b.y;
+-const baseScale = Math.min(
+-  1,
+-  Math.max(0.4, Number(process.env.LAYOUT_SCALE) || 0.8),
+-);
+-function place(metrics: Box, seed: string) {
+-  const prior = db
+-    .prepare("SELECT x,y,width,height FROM signatures")
+-    .all() as Box[];
+-  const occupied = (box: Box) =>
+-    reserved.some((r) => hit(box, r, 8)) || prior.some((r) => hit(box, r));
+-  let h = [...seed].reduce(
+-    (n, c) => (n * 33 + c.charCodeAt(0)) >>> 0,
+-    2166136261,
+-  );
+-  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 1 | h)) >>> 0) / 4294967296;
+-  const at = (scale: number) => {
+-    const width = metrics.width * scale,
+-      height = metrics.height * scale,
+-      size = 64 * scale;
+-    if (width > 1740 || height > 820) return null;
+-    const stepX = width + 22,
+-      stepY = height + 22;
+-    for (let y = 150; y <= 970 - height; y += stepY) {
+-      for (let x = 70; x <= 1810 - width; x += stepX) {
+-        const jitter = 6;
+-        const box = {
+-          x: Math.min(1810 - width, Math.max(70, x + (rnd() * 2 - 1) * jitter)),
+-          y: Math.min(970 - height, Math.max(150, y + (rnd() * 2 - 1) * jitter)),
+-          width,
+-          height,
+-        };
+-        if (!occupied(box)) return { ...box, size, rotation: -6 + rnd() * 12 };
+-      }
+-    }
+-    return null;
+-  };
+-  for (let scale = baseScale; scale >= 0.4 - 1e-9; scale -= 0.05) {
+-    const placed = at(scale);
+-    if (placed) return placed;
+-  }
+-  throw Object.assign(
+-    new Error("签名墙空间不足，无法在不重叠的情况下放置新姓名"),
+-    { statusCode: 409 },
+-  );
+-}
+-const allowed = new Set([
+-  "ma-shan-zheng",
+-  "zhi-mang-xing",
+-  "source-han-sans",
+-  "source-han-serif",
+-  "zcool-xiaowei",
+-  "zcool-kuaile",
+-  "zcool-qingke",
+-]);
++const allowed = new Set(fontIds);
+ app.post("/api/signatures", (req, reply) => {
+   const b = (req.body ?? {}) as any,
+     requestId = String(b.requestId || randomUUID());
+@@ -200,12 +151,27 @@
+   )
+     return reply.code(400).send({ error: "无法取得有效字形尺寸" });
+   const id = randomUUID(),
+-    p = place({ x: 0, y: 0, width, height }, id),
++    splitAt =
++      [...name].length > 6 && /[^\u0000-\u00ff]/u.test(name)
++        ? Math.ceil([...name].length / 2)
++        : 0,
++    prior = (
++      db
++        .prepare("SELECT x,y,width,height,rotation FROM signatures")
++        .all() as (Box & { rotation: number })[]
++    ).map(occupiedBounds),
++    p = place(
++      splitAt ? (width * splitAt) / [...name].length + 16 : width,
++      splitAt ? Math.max(128, height * 2) : height,
++      prior,
++      id,
++      splitAt,
++    ),
+     font = allowed.has(b.fontId) ? b.fontId : "source-han-sans",
+     created = new Date().toISOString();
+   try {
+     db.prepare(
+-      "INSERT INTO signatures(id,request_id,name,font_id,x,y,width,height,size,rotation,status,created_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
++      "INSERT INTO signatures(id,request_id,name,font_id,x,y,width,height,size,rotation,status,created_at,split_at)VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+     ).run(
+       id,
+       requestId,
+@@ -219,6 +185,7 @@
+       p.rotation,
+       "queued",
+       created,
++      p.split_at,
+     );
+   } catch (err: any) {
+     if (String(err?.code || "").startsWith("SQLITE_CONSTRAINT")) {
+@@ -238,9 +205,18 @@
+     status = (req.body as any)?.status;
+   if (!["writing", "complete"].includes(status))
+     return reply.code(400).send({ error: "状态无效" });
+-  const changed = db
+-    .prepare("UPDATE signatures SET status=? WHERE id=?")
+-    .run(status, id);
++  const expected = (req.body as any)?.expectedStatus;
++  const changed = expected
++    ? db
++        .prepare("UPDATE signatures SET status=? WHERE id=? AND status=?")
++        .run(status, id, expected)
++    : db.prepare("UPDATE signatures SET status=? WHERE id=?").run(status, id);
++  if (
++    expected &&
++    !changed.changes &&
++    db.prepare("SELECT 1 FROM signatures WHERE id=?").get(id)
++  )
++    return { id, skipped: true };
+   if (changed.changes === 0)
+     return reply.code(404).send({ error: "签名不存在" });
+   const data = { id, status };
+@@ -295,6 +271,7 @@
+   if (changed.changes === 0)
+     return reply.code(404).send({ error: "签名不存在" });
+   send({ type: "signature.visibility", data: { id, hidden } });
++  send({ type: "snapshot", data: state() });
+   return { ok: true };
+ });
+ app.post("/api/admin/replay", async (req, reply) => {
+@@ -334,12 +311,17 @@
+ if (existsSync(join(root, "dist"))) {
+   await app.register(staticPlugin, {
+     root: join(root, "dist"),
+-    wildcard: false,
++    wildcard: true,
+   });
+   app.setNotFoundHandler((req, reply) =>
+-    req.url.startsWith("/api")
++    !["/", "/admin", "/admin/", "/wall", "/wall/"].includes(
++      req.url.split("?")[0],
++    )
+       ? reply.code(404).send({ error: "Not found" })
+       : reply.sendFile("index.html"),
+   );
+ }
+-await app.listen({ port: Number(process.env.PORT || 8787), host: "0.0.0.0" });
++await app.listen({
++  port: Number(process.env.PORT || 8787),
++  host: process.env.HOST || "0.0.0.0",
++});
+--- /dev/null
++++ b/server/layout.test.ts
+@@ -0,0 +1,32 @@
++import { describe, expect, it } from "vitest";
++import { occupiedBounds, place } from "./layout.js";
++describe("persistent exhibition slots", () => {
++  it("preserves earlier boxes at 120 long, two-line names", () => {
++    const prior: ReturnType<typeof place>[] = [];
++    for (let i = 0; i < 120; i++) {
++      const b = place(400, 144, prior, i.toString(16).padStart(8, "0"), 6);
++      expect(
++        prior.some(
++          (a) =>
++            a.x < b.x + b.width &&
++            b.x < a.x + a.width &&
++            a.y < b.y + b.height &&
++            b.y < a.y + a.height,
++        ),
++      ).toBe(false);
++      expect(b.size).toBeGreaterThanOrEqual(15);
++      prior.push(b);
++    }
++  });
++  it("includes the ink of rotated legacy records", () => {
++    const b = occupiedBounds({
++      x: 100,
++      y: 100,
++      width: 100,
++      height: 40,
++      rotation: -10,
++    });
++    expect(b.y).toBeLessThan(85);
++    expect(b.x + b.width).toBeGreaterThan(201);
++  });
++});
+--- /dev/null
++++ b/server/layout.ts
+@@ -0,0 +1,100 @@
++export type Box = { x: number; y: number; width: number; height: number };
++const columns = 12,
++  rows = 12;
++const left = 70,
++  top = 270,
++  dx = 145,
++  dy = 58;
++const slots: (Box & { rank: number })[] = [];
++const used = new Set<number>();
++function add(col: number, row: number, w: number, h: number, rank: number) {
++  for (let j = row; j < row + h; j++)
++    for (let i = col; i < col + w; i++) used.add(j * columns + i);
++  // Offset the rows independently in each column. A two-column opening space
++  // uses the shared vertical interval, so its neighbours keep their clearance.
++  const edge = (c: number, r: number) =>
++    top +
++    r * dy +
++    19 * Math.sin(c * 1.42 + 0.3) * Math.sin((Math.PI * r) / rows);
++  const lane = Array.from({ length: w }, (_, i) => col + i);
++  const upper = Math.max(...lane.map((c) => edge(c, row))),
++    lower = Math.min(...lane.map((c) => edge(c, row + h)));
++  slots.push({
++    x: left + col * dx,
++    y: upper,
++    width: dx * w,
++    height: lower - upper,
++    rank,
++  });
++}
++// Three larger spaces for the opening signatures. All later reservations avoid them.
++add(4, 3, 2, 2, -3);
++add(1, 8, 2, 2, -2);
++add(9, 1, 2, 2, -1);
++for (let n = 0; n < columns * rows; n++) {
++  const cell = (n * 53 + 19) % (columns * rows);
++  if (!used.has(cell)) add(cell % columns, Math.floor(cell / columns), 1, 1, n);
++}
++const configuredScale = Number(process.env.LAYOUT_SCALE);
++const scaleLimit = configuredScale ? Math.min(1, Math.max(0.4, configuredScale)) : 1;
++const qr = { x: 1590, y: 730, width: 300, height: 320 };
++function intersects(a: Box, b: Box, pad: number) {
++  return (
++    a.x < b.x + b.width + pad &&
++    a.x + a.width + pad > b.x &&
++    a.y < b.y + b.height + pad &&
++    a.y + a.height + pad > b.y
++  );
++}
++export function place(
++  width: number,
++  height: number,
++  prior: Box[],
++  seed: string,
++  splitAt: number,
++) {
++  const fraction = parseInt(seed.slice(0, 4), 16) / 65535;
++  for (const slot of slots) {
++    const isLarge = slot.rank < 0;
++    const maxSize = (isLarge ? 64 : 43) * (0.83 + fraction * 0.17);
++    const scale = Math.min(
++      scaleLimit,
++      maxSize / 64,
++      (slot.width - 20) / width,
++      (slot.height - 18) / height,
++    );
++    const w = width * scale,
++      h = height * scale;
++    const box = {
++      x: slot.x + 10 + (slot.width - w - 20) * fraction,
++      y: slot.y + 9 + (slot.height - h - 18) * (1 - fraction),
++      width: w,
++      height: h,
++    };
++    if (intersects(box, qr, 8) || prior.some((p) => intersects(box, p, 17)))
++      continue;
++    return { ...box, size: 64 * scale, rotation: 0, split_at: splitAt };
++  }
++  throw Object.assign(new Error("签名墙空间已满"), { statusCode: 409 });
++}
++
++export function occupiedBounds(box: Box & { rotation: number }): Box {
++  if (!box.rotation) return box;
++  const angle = (box.rotation * Math.PI) / 180,
++    cos = Math.cos(angle),
++    sin = Math.sin(angle);
++  const points = [
++    [0, 0],
++    [box.width, 0],
++    [0, box.height],
++    [box.width, box.height],
++  ].map(([x, y]) => [box.x + x * cos - y * sin, box.y + x * sin + y * cos]);
++  const xs = points.map((p) => p[0]),
++    ys = points.map((p) => p[1]);
++  return {
++    x: Math.min(...xs),
++    y: Math.min(...ys),
++    width: Math.max(...xs) - Math.min(...xs),
++    height: Math.max(...ys) - Math.min(...ys),
++  };
++}
+--- /dev/null
++++ b/src/Admin.tsx
+@@ -0,0 +1,290 @@
++import { saveBlob } from "./download";
++import { useEffect, useRef, useState } from "react";
++import { api, useLive, type Sig } from "./live";
++import { family, fontRows, loadFace } from "./fonts";
++import { exportBoard } from "./board";
++import { Seal } from "./Poster";
++export function Admin() {
++  const state = useLive(),
++    [token, setToken] = useState(sessionStorage.getItem("admin-token") || ""),
++    [password, setPassword] = useState(""),
++    [query, setQuery] = useState(""),
++    [message, setMessage] = useState(""),
++    [showHidden, setShowHidden] = useState(false),
++    [hiddenList, setHiddenList] = useState<Sig[]>([]),
++    [exporting, setExporting] = useState(false);
++  const loadedNames = useRef(new Set<string>());
++  const refreshHidden = async () => {
++    if (!token) return;
++    try {
++      const all = await api<Sig[]>("/api/admin/signatures", {
++        headers: { authorization: `Bearer ${token}` },
++      });
++      setHiddenList(all.filter((s) => s.hidden));
++    } catch (e) {
++      if ((e as Error).message === "未授权") {
++        sessionStorage.removeItem("admin-token");
++        setToken("");
++      }
++    }
++  };
++  useEffect(() => {
++    refreshHidden();
++  }, [token, state.signatures.length]);
++  const call = async (path: string, init: RequestInit = {}) => {
++    try {
++      const data = await api(path, {
++        ...init,
++        headers: { authorization: `Bearer ${token}`, ...(init.headers || {}) },
++      });
++      setMessage("操作已保存");
++      refreshHidden();
++      return data;
++    } catch (e) {
++      setMessage((e as Error).message);
++    }
++  };
++  useEffect(() => {
++    if (!token) return;
++    for (const record of [...state.signatures, ...hiddenList]) {
++      const key = record.font_id + "|" + record.name;
++      if (loadedNames.current.has(key)) continue;
++      loadedNames.current.add(key);
++      void loadFace(record.font_id, record.name).catch(() => {
++        loadedNames.current.delete(key);
++        setMessage("部分字体未能加载");
++      });
++    }
++  }, [token, state.signatures, hiddenList]);
++  if (!token)
++    return (
++      <main className="admin-login">
++        <p className="eyebrow">
++          <Seal /> INK FIELD / 墨场
++        </p>
++        <h1>管理签到墙</h1>
++        <label>
++          管理员密码
++          <input
++            type="password"
++            value={password}
++            onChange={(e) => setPassword(e.target.value)}
++          />
++        </label>
++        {message && <p className="error">{message}</p>}
++        <button
++          className="primary"
++          onClick={async () => {
++            try {
++              const d = await api("/api/admin/login", {
++                method: "POST",
++                body: JSON.stringify({ password }),
++              });
++              sessionStorage.setItem("admin-token", d.token);
++              setMessage("");
++              setToken(d.token);
++            } catch (e) {
++              setMessage((e as Error).message);
++            }
++          }}
++        >
++          登录后台
++        </button>
++      </main>
++    );
++  const settings = (data: object) =>
++    call("/api/admin/settings", { method: "PUT", body: JSON.stringify(data) });
++  const export4k = async () => {
++    setExporting(true);
++    try {
++      await exportBoard(state, location.origin + "/");
++      setMessage("纪念图已导出");
++    } catch (e) {
++      setMessage("导出失败 · " + (e as Error).message);
++    } finally {
++      setExporting(false);
++    }
++  };
++  const exportCsv = async () => {
++    try {
++      const all = await api<Sig[]>("/api/admin/signatures", {
++        headers: { authorization: `Bearer ${token}` },
++      });
++      const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
++      const head = ["姓名", "字体", "字体ID", "状态", "签到时间"].map(esc);
++      const rows = all.map((s) =>
++        [
++          s.name,
++          fontRows.find((f) => f[0] === s.font_id)?.[1] || "",
++          s.font_id,
++          s.status,
++          s.created_at,
++        ]
++          .map(esc)
++          .join(","),
++      );
++      const csv = "\uFEFF" + [head.join(","), ...rows].join("\r\n");
++      saveBlob(
++        new Blob([csv], { type: "text/csv;charset=utf-8" }),
++        "signature-wall-records.csv",
++      );
++    } catch (e) {
++      setMessage("导出失败 · " + (e as Error).message);
++    }
++  };
++  return (
++    <main className="admin">
++      <header>
++        <div>
++          <p className="eyebrow">
++            <Seal /> INK FIELD / 墨场
++          </p>
++          <h1>现场控制台</h1>
++        </div>
++        <div className="header-actions">
++          <a href="/wall" target="_blank">
++            打开大屏
++          </a>
++          <button onClick={exportCsv}>导出签到记录</button>
++          <button disabled={exporting || !state.online} onClick={export4k}>
++            {exporting ? "正在生成 4K 图…" : "导出 4K 纪念图"}
++          </button>
++        </div>
++      </header>
++      <section className="admin-section">
++        <h2>活动管理</h2>
++        <p className="admin-state">
++          <i /> {state.online ? "实时连接" : "重新连接中"} ·{" "}
++          {state.eventStatus === "open"
++            ? "签到开放"
++            : state.eventStatus === "ended"
++              ? "签到结束"
++              : "签到暂停"}{" "}
++          · {state.animationPaused ? "动画暂停" : "动画开启"}
++        </p>
++        <div className="controls">
++          <button onClick={() => settings({ eventStatus: "open" })}>
++            开启签到
++          </button>
++          <button onClick={() => settings({ eventStatus: "paused" })}>
++            暂停签到
++          </button>
++          <button onClick={() => settings({ eventStatus: "ended" })}>
++            结束签到
++          </button>
++          <button
++            onClick={() =>
++              settings({ animationPaused: !state.animationPaused })
++            }
++          >
++            {state.animationPaused ? "恢复动画" : "暂停动画"}
++          </button>
++          <button onClick={() => call("/api/admin/replay", { method: "POST" })}>
++            重播最近姓名
++          </button>
++          <button
++            onClick={() => {
++              if (window.confirm("确认清空全部签到数据？此操作不可恢复。"))
++                call("/api/admin/signatures", { method: "DELETE" });
++            }}
++          >
++            清空全部签到
++          </button>
++          <span>
++            {state.signatures.length} 人在墙 · {hiddenList.length} 已隐藏 ·{" "}
++            {state.connections} 个连接
++          </span>
++        </div>
++      </section>
++      <section className="admin-section">
++        <div className="section-head">
++          <h2>签到记录</h2>
++          <div className="section-actions">
++            <input
++              value={query}
++              placeholder="搜索姓名"
++              onChange={(e) => setQuery(e.target.value)}
++            />
++            <button onClick={() => setShowHidden((v) => !v)}>
++              {showHidden ? "收起已隐藏" : "显示已隐藏"}
++            </button>
++          </div>
++        </div>
++        <div className="records">
++          {!state.signatures.length && !showHidden && <p>还没有公开签到记录</p>}
++          {(showHidden
++            ? [
++                ...state.signatures,
++                ...hiddenList.filter(
++                  (h) => !state.signatures.some((v) => v.id === h.id),
++                ),
++              ]
++            : state.signatures
++          )
++            .filter((s) => s.name.includes(query))
++            .map((s) => (
++              <article key={s.id} className={s.hidden ? "is-hidden" : ""}>
++                <b style={{ fontFamily: family(s.font_id) }}>{s.name}</b>
++                <span>{fontRows.find((f) => f[0] === s.font_id)?.[1]}</span>
++                <time>{new Date(s.created_at).toLocaleString()}</time>
++                <span>
++                  {s.hidden
++                    ? "已隐藏"
++                    : {
++                        complete: "已署名",
++                        queued: "等待书写",
++                        writing: "书写中",
++                      }[s.status]}
++                </span>
++                <span className="row-actions">
++                  {s.hidden ? (
++                    <button
++                      onClick={() =>
++                        call(`/api/admin/signatures/${s.id}`, {
++                          method: "PATCH",
++                          body: JSON.stringify({ hidden: false }),
++                        })
++                      }
++                    >
++                      恢复
++                    </button>
++                  ) : (
++                    <>
++                      <button
++                        onClick={() =>
++                          call(`/api/admin/signatures/${s.id}`, {
++                            method: "PATCH",
++                            body: JSON.stringify({ hidden: true }),
++                          })
++                        }
++                      >
++                        隐藏
++                      </button>
++                      <button
++                        onClick={() => {
++                          if (window.confirm(`确认删除「${s.name}」？`))
++                            call(`/api/admin/signatures/${s.id}`, {
++                              method: "DELETE",
++                            });
++                        }}
++                      >
++                        删除
++                      </button>
++                    </>
++                  )}
++                </span>
++              </article>
++            ))}
++        </div>
++      </section>
++      <section className="admin-section">
++        <h2>字体授权</h2>
++        <p>
++          {fontRows.length}{" "}
++          款本地中文字体。完整授权、版本和覆盖范围见源码包字体台账。
++        </p>
++      </section>
++      {message && <div className="toast">{message}</div>}
++    </main>
++  );
++}
+--- /dev/null
++++ b/src/InkCanvas.tsx
+@@ -0,0 +1,100 @@
++import { useEffect, useRef } from "react";
++import { drawName, duration, writingData } from "./ink";
++import { loadFace } from "./fonts";
++import type { Sig } from "./live";
++type Props = {
++  s: Sig;
++  paused?: boolean;
++  onFinish?: () => void;
++  replay?: number;
++  onError?: (message: string) => void;
++};
++export function InkCanvas({
++  s,
++  paused = false,
++  onFinish,
++  replay = 0,
++  onError,
++}: Props) {
++  const ref = useRef<HTMLCanvasElement>(null),
++    live = useRef({ paused, onFinish, onError });
++  live.current = { paused, onFinish, onError };
++  useEffect(() => {
++    const c = ref.current!,
++      ctx = c.getContext("2d")!,
++      d = 2;
++    c.width = Math.max(1, Math.ceil(s.width * d));
++    c.height = Math.max(1, Math.ceil(s.height * d));
++    ctx.scale(d, d);
++    let cancelled = false,
++      frame = 0,
++      timer = 0;
++    const local = { ...s, x: 0, y: 0, rotation: 0 };
++    if (s.status === "queued") return;
++    async function start() {
++      try {
++        const animate =
++          s.status === "writing" &&
++          !matchMedia("(prefers-reduced-motion: reduce)").matches;
++        const paths = animate
++          ? await writingData(s)
++          : (await loadFace(s.font_id, s.name), {});
++        if (cancelled) return;
++        let elapsed = 0,
++          last = performance.now();
++        function paint(now: number) {
++          if (cancelled) return;
++          cancelAnimationFrame(frame);
++          clearTimeout(timer);
++          if (live.current.paused) {
++            last = now;
++            timer = window.setTimeout(() => paint(performance.now()), 100);
++            return;
++          }
++          elapsed += Math.max(0, now - last);
++          last = now;
++          const t = animate ? Math.min(1, elapsed / duration(s.name)) : 1;
++          ctx.clearRect(0, 0, s.width + 1, s.height + 1);
++          drawName(ctx, local, t, paths);
++          if (t < 1) {
++            frame = requestAnimationFrame(paint);
++            // Background tabs and busy projectors can delay animation frames.
++            // Only the active name has a fallback clock; the first callback wins.
++            timer = window.setTimeout(() => paint(performance.now()), 180);
++          } else if (s.status === "writing") live.current.onFinish?.();
++        }
++        if (s.status === "complete") {
++          drawName(ctx, local);
++          return;
++        }
++        paint(last);
++      } catch {
++        if (!cancelled) {
++          live.current.onError?.("字体加载中，正在重试");
++          timer = window.setTimeout(start, 1800);
++        }
++      }
++    }
++    void start();
++    return () => {
++      cancelled = true;
++      cancelAnimationFrame(frame);
++      clearTimeout(timer);
++    };
++  }, [
++    s.id,
++    s.name,
++    s.font_id,
++    s.status,
++    s.width,
++    s.height,
++    s.size,
++    s.split_at,
++    replay,
++  ]);
++  return (
++    <canvas ref={ref} aria-label={s.name}>
++      {s.name}
++    </canvas>
++  );
++}
+--- /dev/null
++++ b/src/Poster.tsx
+@@ -0,0 +1,77 @@
++import { useEffect, useRef } from "react";
++import { drawSculpture, drawGrid } from "./art";
++export function Seal() {
++  return (
++    <svg className="seal" viewBox="0 0 40 40" aria-hidden="true">
++      {Array.from({ length: 7 }, (_, i) => (
++        <ellipse
++          key={i}
++          cx="20"
++          cy="20"
++          rx="16"
++          ry="6"
++          transform={`rotate(${i * 17 - 45} 20 20)`}
++          fill="none"
++          stroke="currentColor"
++          strokeWidth="1.25"
++        />
++      ))}
++    </svg>
++  );
++}
++export function Poster({ count }: { count: number }) {
++  const ref = useRef<HTMLCanvasElement>(null);
++  useEffect(() => {
++    const c = ref.current!;
++    const draw = () => {
++      const { width: w, height: h } = c.getBoundingClientRect(),
++        d = Math.min(devicePixelRatio, 2);
++      c.width = Math.round(w * d);
++      c.height = Math.round(h * d);
++      const ctx = c.getContext("2d")!;
++      ctx.scale(d, d);
++      drawGrid(ctx, w, h);
++      const compact = w / h > 1.05;
++      drawSculpture(
++        ctx,
++        compact ? w * 0.78 : w * 0.56,
++        compact ? h * 0.47 : h * 0.54,
++        compact ? Math.min(w * 0.225, h * 0.52) : Math.min(w * 0.38, h * 0.3),
++        count,
++      );
++    };
++    const observer = new ResizeObserver(draw);
++    observer.observe(c);
++    return () => observer.disconnect();
++  }, [count]);
++  return (
++    <section className="poster">
++      <canvas aria-hidden="true" ref={ref} />
++      <div className="brand">
++        <Seal />
++        <span>
++          TRAE <em>on Campus</em>
++        </span>
++        <span className="campus">@四川大学</span>
++      </div>
++      <div className="poster-heading">
++        <div className="micro kicker">
++          <i /> SIGNATURE WALL
++        </div>
++        <h1>
++          Ink <em>Field.</em>
++        </h1>
++        <span className="poster-zh">墨 场</span>
++      </div>
++      <div className="poster-foot">
++        <div className="poster-event">AI Coding Hackathon</div>
++        <div className="poster-meta">
++          <span>
++            11.28 <b>/</b> 13:00–18:20
++          </span>
++          <span>江安校区 · 综合楼 C103</span>
++        </div>
++      </div>
++    </section>
++  );
++}
+--- /dev/null
++++ b/src/Sign.tsx
+@@ -0,0 +1,316 @@
++import { useEffect, useRef, useState } from "react";
++import { catalog, family, loadFace } from "./fonts";
++import { api, type Sig, useLive } from "./live";
++import { Poster, Seal } from "./Poster";
++import { InkCanvas } from "./InkCanvas";
++const groups = [...new Set(catalog.map((f) => f.group))];
++const arrow = (
++  <svg
++    width="20"
++    height="20"
++    viewBox="0 0 24 24"
++    fill="none"
++    aria-hidden="true"
++  >
++    <path d="M5 19 19 5M6 5h13v13" stroke="currentColor" strokeWidth="1.7" />
++  </svg>
++);
++const number = (n: number) => String(n).padStart(2, "0");
++function specimen(name: string, font: string): Sig {
++  return {
++    name,
++    id: "specimen",
++    font_id: font,
++    status: "writing",
++    x: 0,
++    y: 0,
++    width: 350,
++    height: 74,
++    size: 66,
++    rotation: 0,
++    created_at: "",
++  };
++}
++export function Sign() {
++  const state = useLive();
++  const [name, setName] = useState(""),
++    [font, setFont] = useState(catalog[0]),
++    [group, setGroup] = useState(groups[0]);
++  const [ready, setReady] = useState(false),
++    [missing, setMissing] = useState(""),
++    [busy, setBusy] = useState(false);
++  const [error, setError] = useState(""),
++    [done, setDone] = useState<Sig>(),
++    [replay, setReplay] = useState(0);
++  const [sampleReady, setSampleReady] = useState(""),
++    [reload, setReload] = useState(0);
++  const request = useRef({ key: "", id: "" }),
++    lock = useRef(false);
++  const text = name.trim() || "山川",
++    groupFonts = catalog.filter((f) => f.group === group);
++  useEffect(() => {
++    let active = true;
++    setReady(false);
++    setError("");
++    loadFace(font.id, text)
++      .then((m) => {
++        if (active) {
++          setMissing(
++            m.missing.length
++              ? "「" +
++                  m.missing.join("、") +
++                  "」" +
++                  (m.device.length
++                    ? "含设备补字，请核对预览"
++                    : "使用本地补充字形")
++              : "",
++          );
++          setReady(true);
++        }
++      })
++      .catch(() => {
++        if (active) setError("字库加载失败，请重新加载");
++      });
++    return () => {
++      active = false;
++    };
++  }, [font, text, reload]);
++  useEffect(() => {
++    let active = true;
++    setSampleReady("");
++    Promise.all(
++      catalog
++        .filter((f) => f.group === group)
++        .map((f) => loadFace(f.id, "山川")),
++    )
++      .then(() => {
++        if (active) setSampleReady(group);
++      })
++      .catch(() => {
++        if (active) setError("字体标本加载失败，请重试");
++      });
++    return () => {
++      active = false;
++    };
++  }, [group, reload]);
++  async function submit(e: React.FormEvent) {
++    e.preventDefault();
++    if (
++      lock.current ||
++      !name.trim() ||
++      !ready ||
++      !state.online ||
++      state.eventStatus !== "open"
++    )
++      return;
++    lock.current = true;
++    setBusy(true);
++    setError("");
++    try {
++      const actual = name.trim();
++      await loadFace(font.id, actual);
++      const ctx = document.createElement("canvas").getContext("2d")!;
++      ctx.font = `64px ${family(font.id)}`;
++      const metrics = [...actual].map((c) => ctx.measureText(c));
++      const width =
++        metrics.reduce((a, m) => a + m.width, 0) +
++        Math.max(0, metrics[0].actualBoundingBoxLeft) +
++        8;
++      const height =
++        Math.max(...metrics.map((m) => m.actualBoundingBoxAscent)) +
++        Math.max(...metrics.map((m) => m.actualBoundingBoxDescent)) +
++        8;
++      const key = JSON.stringify([actual, font.id]);
++      if (request.current.key !== key)
++        request.current = {
++          key,
++          id: Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) =>
++            n.toString(16).padStart(8, "0"),
++          ).join(""),
++        };
++      setDone(
++        await api<Sig>("/api/signatures", {
++          method: "POST",
++          body: JSON.stringify({
++            name: actual,
++            fontId: font.id,
++            requestId: request.current.id,
++            metrics: {
++              width: Math.max(8, Math.ceil(width)),
++              height: Math.max(20, Math.ceil(height)),
++            },
++          }),
++        }),
++      );
++    } catch (err) {
++      setError((err as Error).message);
++    } finally {
++      setBusy(false);
++      lock.current = false;
++    }
++  }
++  if (done)
++    return (
++      <main className="success">
++        <section className="receipt">
++          <div className="receipt-top">
++            <Seal />
++            <span className="micro">INK FIELD / 墨场</span>
++          </div>
++          <div className="receipt-status">
++            <i /> 签到已确认
++          </div>
++          <h1 style={{ fontFamily: family(done.font_id) }}>{done.name}</h1>
++          <p>抬头看大屏，你的名字将在这里落笔。</p>
++          <dl>
++            <div>
++              <dt>所选字体</dt>
++              <dd>{font.label}</dd>
++            </div>
++            <div>
++              <dt>落笔坐标</dt>
++              <dd>
++                {Math.round(done.x)} , {Math.round(done.y)}
++              </dd>
++            </div>
++          </dl>
++          <p className="receipt-event">
++            TRAE on Campus @四川大学
++            <br />
++            AI Coding Hackathon
++          </p>
++          <button
++            className="primary"
++            onClick={() => {
++              request.current = { key: "", id: "" };
++              setDone(undefined);
++              setName("");
++            }}
++          >
++            继续签到 {arrow}
++          </button>
++        </section>
++      </main>
++    );
++  return (
++    <main className="studio">
++      <Poster count={state.signatures.length} />
++      <form className="desk" onSubmit={submit}>
++        <div className="desk-top">
++          <span className="micro">SIGNATURE STUDIO</span>
++          <span className="live-pill">
++            <i />
++            {!state.online
++              ? "连接中"
++              : state.eventStatus === "open"
++                ? "签到开放"
++                : "签到暂停"}
++          </span>
++        </div>
++        <h2>
++          创作你的签名<span>.</span>
++        </h2>
++        <div className="name-label">
++          <label htmlFor="name">姓名或昵称</label>
++          <span className="micro">{[...name].length} / 12</span>
++        </div>
++        <input
++          id="name"
++          placeholder="输入你的名字"
++          autoComplete="off"
++          value={name}
++          onChange={(e) => setName([...e.target.value].slice(0, 12).join(""))}
++        />
++        <section className="proof">
++          <div className="proof-head">
++            <span>签名预览</span>
++            <button
++              type="button"
++              onClick={() => setReplay((n) => n + 1)}
++              aria-label="重新书写预览"
++            >
++              ↻ 重写
++            </button>
++          </div>
++          <div className="preview" style={{ fontFamily: family(font.id) }}>
++            <InkCanvas s={specimen(text, font.id)} replay={replay} />
++          </div>
++          <div className="proof-foot">
++            <span>{font.label}</span>
++            <span>FIG. {number(catalog.indexOf(font) + 1)}</span>
++          </div>
++        </section>
++        {missing && <p className="coverage">{missing}</p>}
++        <div className="spec-head">
++          <h3>字体标本</h3>
++          <span className="micro">{catalog.length} TYPEFACES</span>
++        </div>
++        <div className="tabs" role="group" aria-label="字体类别">
++          {groups.map((g) => (
++            <button
++              type="button"
++              aria-pressed={group === g}
++              className={group === g ? "active" : ""}
++              key={g}
++              onClick={() => setGroup(g)}
++            >
++              {g}
++            </button>
++          ))}
++        </div>
++        <div className="font-grid" key={group}>
++          {groupFonts.map((f) => (
++            <button
++              type="button"
++              className={"font-card " + (f.id === font.id ? "selected" : "")}
++              key={f.id}
++              aria-pressed={f.id === font.id}
++              onClick={() => setFont(f)}
++            >
++              <span className="card-no">{number(catalog.indexOf(f) + 1)}</span>
++              <span className="check" aria-hidden="true">
++                {f.id === font.id ? "✓" : ""}
++              </span>
++              <strong
++                style={{
++                  fontFamily: family(f.id),
++                  visibility: sampleReady === group ? "visible" : "hidden",
++                }}
++              >
++                山川
++              </strong>
++              <small>{f.label}</small>
++            </button>
++          ))}
++        </div>
++        {error && (
++          <div className="error" role="alert">
++            {error}{" "}
++            <button type="button" onClick={() => setReload((n) => n + 1)}>
++              重试
++            </button>
++          </div>
++        )}
++        <button
++          className="primary"
++          disabled={
++            !name.trim() ||
++            busy ||
++            !ready ||
++            !state.online ||
++            state.eventStatus !== "open"
++          }
++        >
++          {!state.online
++            ? "正在连接"
++            : state.eventStatus !== "open"
++              ? "签到暂未开放"
++              : busy
++                ? "正在落款…"
++                : "确认签到"}
++          {arrow}
++        </button>
++      </form>
++    </main>
++  );
++}
+--- /dev/null
++++ b/src/Wall.tsx
+@@ -0,0 +1,183 @@
++import { memo, useCallback, useEffect, useRef, useState } from "react";
++import { drawBoard, prepareBoard } from "./board";
++import { useLive, api, type Sig } from "./live";
++import { InkCanvas } from "./InkCanvas";
++import { writingData } from "./ink";
++export const signUrl = () => location.origin + "/";
++const Name = memo(function Name({
++  s,
++  paused,
++  finish,
++  error,
++  retry,
++}: {
++  retry: number;
++  s: Sig;
++  paused: boolean;
++  finish: (id: string) => void;
++  error: (m: string) => void;
++}) {
++  return (
++    <div
++      data-id={s.id}
++      className={"signature " + s.status}
++      style={{
++        left: s.x,
++        top: s.y,
++        width: s.width,
++        height: s.height,
++        transform: `rotate(${s.rotation}deg)`,
++      }}
++    >
++      <InkCanvas
++        s={s}
++        replay={retry}
++        paused={paused}
++        onFinish={() => finish(s.id)}
++        onError={error}
++      />
++    </div>
++  );
++});
++export function Wall() {
++  const state = useLive(),
++    ref = useRef<HTMLCanvasElement>(null),
++    [warning, setWarning] = useState("");
++  const [scale, setScale] = useState(() =>
++    Math.min(innerWidth / 1920, innerHeight / 1080),
++  );
++  const [retry, setRetry] = useState(0);
++  const timers = useRef(new Set<number>());
++  const schedule = useCallback(() => {
++    const id = window.setTimeout(() => {
++      timers.current.delete(id);
++      setRetry((n) => n + 1);
++    }, 1100);
++    timers.current.add(id);
++  }, []);
++  useEffect(
++    () => () => {
++      timers.current.forEach(clearTimeout);
++    },
++    [],
++  );
++  useEffect(() => {
++    const resize = () =>
++      setScale(Math.min(innerWidth / 1920, innerHeight / 1080));
++    addEventListener("resize", resize);
++    return () => removeEventListener("resize", resize);
++  }, []);
++  const count = state.signatures.length;
++  useEffect(() => {
++    let active = true;
++    const c = ref.current!,
++      ctx = c.getContext("2d")!;
++    const draw = () => {
++      if (active) drawBoard(ctx, state, state.online, signUrl());
++    };
++    let frame = 0;
++    prepareBoard()
++      .then(() => {
++        if (active) frame = requestAnimationFrame(draw);
++      })
++      .catch(() => {
++        if (active) {
++          setWarning("展签字体加载中");
++          schedule();
++        }
++      });
++    return () => {
++      active = false;
++      cancelAnimationFrame(frame);
++    };
++  }, [count, state.online, state.eventStatus, state.animationPaused, retry]);
++  const next = state.signatures.find((s) => s.status !== "complete");
++  useEffect(() => {
++    if (
++      !next ||
++      next.status !== "queued" ||
++      state.animationPaused ||
++      !state.online
++    )
++      return;
++    let active = true;
++    writingData(next)
++      .then(() => {
++        if (active)
++          return api(`/api/signatures/${next.id}/status`, {
++            method: "PATCH",
++            body: JSON.stringify({
++              status: "writing",
++              expectedStatus: "queued",
++            }),
++          });
++      })
++      .then(() => {
++        if (active) setWarning("");
++      })
++      .catch(() => {
++        if (active) {
++          setWarning("书写准备中，正在重试");
++          schedule();
++        }
++      });
++    return () => {
++      active = false;
++    };
++  }, [
++    next?.id,
++    next?.status,
++    state.animationPaused,
++    state.online,
++    retry,
++    schedule,
++  ]);
++  const complete = useCallback(
++    (id: string) => {
++      api(`/api/signatures/${id}/status`, {
++        method: "PATCH",
++        body: JSON.stringify({ status: "complete", expectedStatus: "writing" }),
++      })
++        .then(() => setWarning(""))
++        .catch(() => {
++          setWarning("正在同步书写状态");
++          schedule();
++        });
++    },
++    [schedule],
++  );
++  return (
++    <main className="wall">
++      <div
++        className="board"
++        style={{ transform: `translate(-50%,-50%) scale(${scale})` }}
++      >
++        <canvas
++          width="1920"
++          height="1080"
++          ref={ref}
++          aria-label="墨场 · TRAE on Campus @四川大学 · AI Coding Hackathon"
++        />
++        <div className="wall-count sr-only">
++          <strong>{count}</strong> 人已署名
++        </div>
++        <a className="qr-link" href={signUrl()} aria-label="手机扫码签到" />
++        {state.signatures.map((s) => (
++          <Name
++            key={s.id}
++            retry={s.status === "writing" ? retry : 0}
++            s={s}
++            paused={state.animationPaused || !state.online}
++            finish={complete}
++            error={setWarning}
++          />
++        ))}
++        {warning && (
++          <p className="wall-note" role="status">
++            {warning}
++          </p>
++        )}
++      </div>
++    </main>
++  );
++}
+--- /dev/null
++++ b/src/art.ts
+@@ -0,0 +1,117 @@
++// A folded annulus. Project and depth-sort its strips once for each new edition.
++type Point = { x: number; y: number; z: number };
++type Facet = {
++  a: Point;
++  b: Point;
++  c: Point;
++  d: Point;
++  depth: number;
++  color: string;
++  thread: string;
++};
++function project(t: number, u: number, phase: number): Point {
++  const twist = t * 1.5 + 0.4 + 0.12 * Math.sin(phase);
++  const r = 1 + 0.17 * Math.cos(3 * t - 0.5) + u * 0.42 * Math.cos(twist);
++  const x = r * Math.cos(t);
++  const y = r * Math.sin(t);
++  const z =
++    0.39 * Math.sin(2 * t + 0.5) + u * 0.58 * Math.sin(twist) + 0.09 * u * u;
++  return {
++    x: x + 0.18 * y,
++    y: y * 0.55 - z * 0.85 - 0.2 * x,
++    z: y * 0.85 + z * 0.55,
++  };
++}
++export function drawSculpture(
++  ctx: CanvasRenderingContext2D,
++  cx: number,
++  cy: number,
++  scale: number,
++  count: number,
++) {
++  const facets: Facet[] = [];
++  const phase = Math.log1p(count) * 0.8;
++  const segments = 128,
++    threads = 48;
++  const grid = Array.from({ length: segments + 1 }, (_, i) =>
++    Array.from({ length: threads + 1 }, (_, j) =>
++      project((i * 2 * Math.PI) / segments, (j * 2) / threads - 1, phase),
++    ),
++  );
++  for (let i = 0; i < segments; i++) {
++    const t = (i * Math.PI * 2) / segments;
++    for (let j = 0; j < threads; j++) {
++      const a = grid[i][j],
++        b = grid[i + 1][j],
++        c = grid[i + 1][j + 1],
++        d = grid[i][j + 1];
++      const u = j / threads;
++      const glint = Math.pow((1 + Math.cos(t * 2 - 1.1 + u * 2.7)) * 0.5, 2);
++      const warm = Math.max(0, Math.cos(t - 0.4) * 0.85 + u * 0.3);
++      const edge = Math.pow(Math.abs(2 * u - 1), 5);
++      const highlight = Math.pow(
++        Math.max(0, Math.cos(t * 2.5 + u * 2 - 0.9)),
++        16,
++      );
++      const intensity = Math.min(
++        1.25,
++        0.2 + glint * 0.65 + edge * 0.32 + highlight * 0.5,
++      );
++      const rgb = [150 + 100 * warm, 140 - 12 * warm, 241 - 139 * warm];
++      const pigment = (k: number) =>
++        "rgb(" +
++        rgb.map((v) => Math.min(255, Math.round(8 + v * k))).join(",") +
++        ")";
++      facets.push({
++        a,
++        b,
++        c,
++        d,
++        depth: (a.z + b.z + c.z + d.z) / 4,
++        color: pigment(intensity * 0.7),
++        thread: pigment(intensity + 0.19),
++      });
++    }
++  }
++  facets.sort((a, b) => a.depth - b.depth);
++  ctx.save();
++  ctx.translate(cx, cy);
++  ctx.scale(scale, scale);
++  for (const f of facets) {
++    ctx.fillStyle = f.color;
++    ctx.beginPath();
++    ctx.moveTo(f.a.x, f.a.y);
++    ctx.lineTo(f.b.x, f.b.y);
++    ctx.lineTo(f.c.x, f.c.y);
++    ctx.lineTo(f.d.x, f.d.y);
++    ctx.closePath();
++    ctx.fill();
++    ctx.strokeStyle = f.thread;
++    ctx.lineWidth = 0.003;
++    ctx.beginPath();
++    ctx.moveTo(f.a.x, f.a.y);
++    ctx.lineTo(f.b.x, f.b.y);
++    ctx.stroke();
++  }
++  ctx.restore();
++}
++export function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
++  ctx.fillStyle = "#171521";
++  ctx.fillRect(0, 0, w, h);
++  ctx.fillStyle = "#484251";
++  for (let y = 18; y < h; y += 26)
++    for (let x = 18; x < w; x += 26) ctx.fillRect(x, y, 1, 1);
++}
++export function mark(
++  ctx: CanvasRenderingContext2D,
++  x: number,
++  y: number,
++  r = 5,
++) {
++  ctx.beginPath();
++  ctx.moveTo(x - r, y);
++  ctx.lineTo(x + r, y);
++  ctx.moveTo(x, y - r);
++  ctx.lineTo(x, y + r);
++  ctx.stroke();
++}
+--- /dev/null
++++ b/src/board.ts
+@@ -0,0 +1,133 @@
++import { saveBlob } from "./download";
++import QRCode from "qrcode";
++import { drawGrid, drawSculpture, mark } from "./art";
++import { loadFace } from "./fonts";
++import { drawName } from "./ink";
++import type { State } from "./live";
++const mono = "monospace",
++  sans = 'Arial, "Noto Sans SC", sans-serif',
++  serif = 'Georgia, "Times New Roman", serif';
++const brandText =
++  "四川大学实时签到已署名墨场扫码签到书写暂停连接中签到已结束江安校区综合楼尚待第一位署名";
++export const prepareBoard = () => loadFace("source-han-sans", brandText);
++export function drawBoard(
++  c: CanvasRenderingContext2D,
++  s: State,
++  online: boolean,
++  signURL: string,
++) {
++  drawGrid(c, 1920, 1080);
++  const count = s.signatures.length;
++  c.save();
++  c.globalAlpha = 0.16 + 0.84 * Math.exp(-count / 24);
++  drawSculpture(c, 1150, 553, 374, count);
++  c.restore();
++  c.strokeStyle = "#60566a";
++  c.lineWidth = 1;
++  const rule = (x: number, y: number, x2: number, y2: number) => {
++    c.beginPath();
++    c.moveTo(x, y);
++    c.lineTo(x2, y2);
++    c.stroke();
++  };
++  const txt = (
++    str: string,
++    x: number,
++    y: number,
++    font: string,
++    color = "#f3ede6",
++  ) => {
++    c.font = font;
++    c.fillStyle = color;
++    c.fillText(str, x, y);
++  };
++  rule(60, 84, 1860, 84);
++  rule(60, 977, 1701, 977);
++  c.strokeStyle = "#b0a3c4";
++  for (const [x, y] of [
++    [60, 84],
++    [1860, 84],
++    [60, 977],
++    [1701, 977],
++  ])
++    mark(c, x, y, 5);
++  c.save();
++  c.translate(79, 46);
++  c.strokeStyle = "#ff9d74";
++  c.lineWidth = 1.4;
++  for (let i = 0; i < 7; i++) {
++    c.beginPath();
++    c.ellipse(0, 0, 18, 6, ((i * 17 - 45) * Math.PI) / 180, 0, Math.PI * 2);
++    c.stroke();
++  }
++  c.restore();
++  txt("TRAE on Campus", 114, 55, "bold 26px " + sans);
++  txt("@四川大学", 349, 54, "21px " + sans, "#d5c9da");
++  txt("11.28  /  13:00–18:20", 1462, 52, "18px " + mono, "#d9cedf");
++  txt("C103", 1804, 52, "18px " + mono, "#ffa57e");
++  const legacyHeader = s.signatures.some(
++    (n) => n.x < 580 && n.y < 266 && n.y + n.height > 125,
++  );
++  if (legacyHeader) {
++    txt("Ink Field.  墨场", 62, 138, "48px " + serif, "#d1bef5");
++    txt("AI Coding Hackathon", 650, 131, "32px " + sans);
++  } else {
++    txt("墨 场   /   SIGNATURE WALL", 65, 127, "17px " + mono, "#c8badd");
++    txt("Ink", 58, 228, "110px " + serif);
++    txt("Field.", 240, 228, "italic 110px " + serif, "#d1bef5");
++    txt("AI Coding Hackathon", 65, 264, "32px " + sans);
++  }
++  txt(String(count).padStart(3, "0"), 1637, 204, "72px " + serif);
++  txt("已署名  /  SIGNED", 1643, 235, "16px " + sans, "#c8badd");
++  if (!count) txt("尚待第一位署名", 69, 566, "23px " + sans, "#b6a9bc");
++  c.fillStyle = online ? "#ffa27d" : "#9991a1";
++  c.beginPath();
++  c.arc(70, 1020, 5, 0, Math.PI * 2);
++  c.fill();
++  txt(
++    !online
++      ? "连接中"
++      : s.animationPaused
++        ? "书写暂停"
++        : s.eventStatus === "open"
++          ? "实时签到  /  LIVE"
++          : s.eventStatus === "ended"
++            ? "签到已结束"
++            : "签到暂停",
++    88,
++    1027,
++    "19px " + sans,
++  );
++  txt("江安校区 · 综合楼 C103", 520, 1027, "18px " + sans, "#c8badd");
++  txt("扫码签到", 1510, 1011, "25px " + sans);
++  txt("SCAN TO SIGN  ↗", 1510, 1040, "16px " + mono, "#eebaab");
++  const qr = QRCode.create(signURL, { errorCorrectionLevel: "M" }).modules;
++  const module = Math.min(5, Math.floor(155 / (qr.size + 8))),
++    size = (qr.size + 8) * module,
++    x = 1860 - size,
++    y = 1042 - size;
++  c.fillStyle = "#faf6f0";
++  c.fillRect(x, y, size, size);
++  c.fillStyle = "#171521";
++  for (let r = 0; r < qr.size; r++)
++    for (let k = 0; k < qr.size; k++)
++      if (qr.get(r, k))
++        c.fillRect(x + (k + 4) * module, y + (r + 4) * module, module, module);
++}
++export async function exportBoard(s: State, url: string) {
++  await Promise.all([
++    prepareBoard(),
++    ...s.signatures.map((n) => loadFace(n.font_id, n.name)),
++  ]);
++  const c = document.createElement("canvas");
++  c.width = 3840;
++  c.height = 2160;
++  const ctx = c.getContext("2d")!;
++  ctx.scale(2, 2);
++  drawBoard(ctx, s, true, url);
++  s.signatures.forEach((n) => drawName(ctx, n));
++  const blob = await new Promise<Blob>((ok, fail) =>
++    c.toBlob((b) => (b ? ok(b) : fail(Error("图片编码失败"))), "image/png"),
++  );
++  saveBlob(blob, "signature-wall-4k.png");
++}
+--- /dev/null
++++ b/src/catalog.json
+@@ -0,0 +1,146 @@
++[
++  {
++    "id": "ma-shan-zheng",
++    "label": "马善政楷书",
++    "group": "笔墨",
++    "family": "Ma Shan Zheng"
++  },
++  {
++    "id": "zhi-mang-xing",
++    "label": "志莽行书",
++    "group": "笔墨",
++    "family": "Zhi Mang Xing"
++  },
++  {
++    "id": "long-cang",
++    "label": "龙藏体",
++    "group": "笔墨",
++    "family": "Long Cang"
++  },
++  {
++    "id": "liu-jian-mao-cao",
++    "label": "流江毛草",
++    "group": "笔墨",
++    "family": "Liu Jian Mao Cao"
++  },
++  {
++    "id": "zhuque",
++    "label": "朱雀仿宋",
++    "group": "笔墨",
++    "family": "Zhuque Fangsong"
++  },
++  {
++    "id": "bpmf",
++    "label": "字嗨注音楷书",
++    "group": "笔墨",
++    "family": "Bpmf Zihi Kai Std"
++  },
++  {
++    "id": "lxgw-wenkai",
++    "label": "霞鹜文楷",
++    "group": "手写",
++    "family": "LXGW WenKai"
++  },
++  {
++    "id": "yozai",
++    "label": "悠哉字体",
++    "group": "手写",
++    "family": "Yozai"
++  },
++  {
++    "id": "xiaolai",
++    "label": "小赖字体",
++    "group": "手写",
++    "family": "Xiaolai"
++  },
++  {
++    "id": "iansui",
++    "label": "芫荽",
++    "group": "手写",
++    "family": "Iansui"
++  },
++  {
++    "id": "huninn",
++    "label": "粉圆",
++    "group": "手写",
++    "family": "Huninn"
++  },
++  {
++    "id": "child-fun",
++    "label": "游趣体",
++    "group": "手写",
++    "family": "ChildFun Sans"
++  },
++  {
++    "id": "source-han-serif",
++    "label": "Noto 宋体",
++    "group": "印刷",
++    "family": "Noto Serif SC"
++  },
++  {
++    "id": "zcool-xiaowei",
++    "label": "站酷小薇",
++    "group": "印刷",
++    "family": "ZCOOL XiaoWei"
++  },
++  {
++    "id": "source-han-sans",
++    "label": "Noto 黑体",
++    "group": "印刷",
++    "family": "Noto Sans SC"
++  },
++  {
++    "id": "jason",
++    "label": "清松手写",
++    "group": "手写",
++    "family": "Ink Field Study JS"
++  },
++  {
++    "id": "chiron",
++    "label": "昭源黑体",
++    "group": "印刷",
++    "family": "Chiron Hei HK"
++  },
++  {
++    "id": "maple",
++    "label": "Maple 等宽",
++    "group": "印刷",
++    "family": "Maple Mono CN"
++  },
++  {
++    "id": "smiley",
++    "label": "得意黑",
++    "group": "实验",
++    "family": "Smiley Sans"
++  },
++  {
++    "id": "chen",
++    "label": "辰宇落雁",
++    "group": "手写",
++    "family": "Ink Field Study CY"
++  },
++  {
++    "id": "zcool-qingke",
++    "label": "站酷庆科黄油",
++    "group": "实验",
++    "family": "ZCOOL QingKe HuangYou"
++  },
++  {
++    "id": "zcool-kuaile",
++    "label": "站酷快乐",
++    "group": "实验",
++    "family": "ZCOOL KuaiLe"
++  },
++  {
++    "id": "cubic",
++    "label": "俐方体 11",
++    "group": "实验",
++    "family": "Cubic 11"
++  },
++  {
++    "id": "boutique",
++    "label": "精品点阵 9×9",
++    "group": "实验",
++    "family": "Boutique Bitmap"
++  }
++]
+--- /dev/null
++++ b/src/download.ts
+@@ -0,0 +1,11 @@
++export function saveBlob(blob: Blob, filename: string) {
++  const url = URL.createObjectURL(blob);
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = filename;
++  document.body.append(link);
++  link.click();
++  link.remove();
++  // Chromium can start consuming the object URL after the click handler returns.
++  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
++}
+--- /dev/null
++++ b/src/fonts.ts
+@@ -0,0 +1,74 @@
++import catalog from "./catalog.json";
++export { catalog };
++export const fontRows = catalog.map((f) => [f.id, f.label, f.group]);
++const catalogById = new Map(catalog.map((f) => [f.id, f]));
++const resolve = (id: string) =>
++  catalogById.get(id) || catalogById.get("source-han-sans")!;
++export const family = (id: string) =>
++  [...new Set([resolve(id).family, "LXGW WenKai", "Noto Sans SC"])]
++    .map((f) => '"' + f + '"')
++    .join(", ") + ", sans-serif";
++const styles = new Map<string, Promise<void>>();
++const maps = new Map<string, Promise<number[][]>>();
++function stylesheet(id: string) {
++  if (!styles.has(id))
++    styles.set(
++      id,
++      new Promise((ok, fail) => {
++        const link = document.createElement("link");
++        link.rel = "stylesheet";
++        link.href = `/fonts/${id}/font.css`;
++        link.onload = () => ok();
++        link.onerror = () => {
++          link.remove();
++          styles.delete(id);
++          fail(Error("字库未能加载，请重试"));
++        };
++        document.head.append(link);
++      }),
++    );
++  return styles.get(id)!;
++}
++function coverage(id: string) {
++  if (!maps.has(id))
++    maps.set(
++      id,
++      fetch(`/fonts/${id}/coverage.json`)
++        .then((r) => r.json())
++        .then((s: string) =>
++          s
++            .split(",")
++            .map((part) => part.split("-").map((v) => parseInt(v, 16))),
++        )
++        .catch((e) => {
++          maps.delete(id);
++          throw e;
++        }),
++    );
++  return maps.get(id)!;
++}
++async function loadOne(rawId: string, text: string) {
++  const font = resolve(rawId),
++    runes = [...new Set(text)];
++  const [, ranges] = await Promise.all([
++    stylesheet(font.id),
++    coverage(font.id),
++  ]);
++  const missing = runes.filter((c) => {
++    const cp = c.codePointAt(0)!;
++    return !ranges.some(([lo, hi]) => cp >= lo && cp <= (hi ?? lo));
++  });
++  const available = runes.filter((c) => !missing.includes(c)).join("");
++  if (available) await document.fonts.load(`64px "${font.family}"`, available);
++  return missing;
++}
++
++export async function loadFace(id: string, text: string) {
++  const missing = await loadOne(id, text);
++  let remaining = missing;
++  for (const fallback of ["lxgw-wenkai", "source-han-sans"]) {
++    if (remaining.length && resolve(id).id !== fallback)
++      remaining = await loadOne(fallback, remaining.join(""));
++  }
++  return { missing, device: remaining };
++}
+--- /dev/null
++++ b/src/ink.ts
+@@ -0,0 +1,169 @@
++import { family, loadFace } from "./fonts";
++import type { Sig } from "./live";
++type Stroke = [number, number][];
++type Glyphs = Record<string, Stroke[]>;
++let index: Promise<number[]> | undefined;
++const blocks = new Map<number, Promise<Glyphs>>();
++async function pathsFor(text: string) {
++  const keys = await (index ??= fetch("/strokes/index.json")
++    .then((r) => r.json())
++    .catch((e) => {
++      index = undefined;
++      throw e;
++    }));
++  const ids = new Set(
++    [...text]
++      .map((c) => Math.floor(c.codePointAt(0)! / 128))
++      .filter((k) => keys.includes(k)),
++  );
++  const data = await Promise.all(
++    [...ids].map((id) => {
++      if (!blocks.has(id))
++        blocks.set(
++          id,
++          fetch(`/strokes/${id}.json`)
++            .then((r) => r.json())
++            .then((d) => d.glyphs)
++            .catch((e) => {
++              blocks.delete(id);
++              throw e;
++            }),
++        );
++      return blocks.get(id)!;
++    }),
++  );
++  return Object.assign({}, ...data) as Glyphs;
++}
++export async function writingData(s: Sig) {
++  const [, paths] = await Promise.all([
++    loadFace(s.font_id, s.name),
++    pathsFor(s.name),
++  ]);
++  return paths;
++}
++export const duration = (name: string) => Math.max(900, [...name].length * 550);
++function reveal(
++  ctx: CanvasRenderingContext2D,
++  strokes: Stroke[] | undefined,
++  x: number,
++  y: number,
++  w: number,
++  h: number,
++  t: number,
++) {
++  ctx.beginPath();
++  if (!strokes?.length) {
++    ctx.moveTo(x, y);
++    ctx.lineTo(x + w * (t * 1.3), y);
++    ctx.lineTo(x + w * (t * 1.3 - 0.3), y + h);
++    ctx.lineTo(x, y + h);
++    ctx.clip();
++    return;
++  }
++  const pts = strokes.flat();
++  const xs = pts.map((p) => p[0]),
++    ys = pts.map((p) => p[1]);
++  const xmin = Math.min(...xs),
++    xmax = Math.max(...xs),
++    ymin = Math.min(...ys),
++    ymax = Math.max(...ys);
++  const progress = t * strokes.length;
++  // Lay down overlapping brush dabs along the actual stroke medians. The last wash
++  // picks up flourishes outside the reference skeleton of the selected typeface.
++  const radius =
++    Math.max(w, h) * (0.115 + 0.8 * Math.max(0, (t - 0.85) / 0.15));
++  const map = (p: [number, number]) => [
++    x + w * (0.08 + (0.84 * (p[0] - xmin)) / Math.max(1, xmax - xmin)),
++    y + h * (0.08 + (0.84 * (ymax - p[1])) / Math.max(1, ymax - ymin)),
++  ];
++  for (let k = 0; k < Math.min(Math.ceil(progress), strokes.length); k++) {
++    const stroke = strokes[k],
++      end = Math.min(1, progress - k) * (stroke.length - 1);
++    for (let j = 0; j <= Math.floor(end); j++) {
++      const a = map(stroke[j]),
++        b = map(stroke[Math.min(j + 1, stroke.length - 1)]),
++        frac = Math.min(1, end - j);
++      const steps = Math.ceil(
++        (Math.hypot(b[0] - a[0], b[1] - a[1]) * frac) /
++          Math.max(1, radius * 0.65),
++      );
++      for (let m = 0; m <= steps; m++) {
++        const f = (frac * m) / Math.max(1, steps),
++          px = a[0] + (b[0] - a[0]) * f,
++          py = a[1] + (b[1] - a[1]) * f;
++        ctx.moveTo(px + radius, py);
++        ctx.arc(px, py, radius, 0, Math.PI * 2);
++      }
++    }
++  }
++  ctx.clip();
++}
++export function drawName(
++  ctx: CanvasRenderingContext2D,
++  s: Sig,
++  progress = 1,
++  paths: Glyphs = {},
++) {
++  ctx.save();
++  ctx.translate(s.x, s.y);
++  ctx.rotate((s.rotation * Math.PI) / 180);
++  ctx.font = `${s.size}px ${family(s.font_id)}`;
++  ctx.textBaseline = "alphabetic";
++  const chars = [...s.name],
++    lines = s.split_at
++      ? [chars.slice(0, s.split_at), chars.slice(s.split_at)]
++      : [chars];
++  const progressInChars = progress * chars.length;
++  let offset = 0;
++  const palette = ["#f4eee7", "#f2c4ba", "#d8c9ff", "#e6e2f0", "#edc9a9"];
++  ctx.fillStyle =
++    palette[
++      [...s.id].reduce((v, c) => v + c.charCodeAt(0), 0) % palette.length
++    ];
++  lines.forEach((line, row) => {
++    const glyphs = line.map((c) => ctx.measureText(c)),
++      advance = glyphs.reduce((v, m) => v + m.width, 0);
++    const ascent = Math.max(1, ...glyphs.map((m) => m.actualBoundingBoxAscent)),
++      descent = Math.max(1, ...glyphs.map((m) => m.actualBoundingBoxDescent));
++    const left = Math.max(0, glyphs[0]?.actualBoundingBoxLeft || 0);
++    const last = glyphs[glyphs.length - 1],
++      right = Math.max(0, last.actualBoundingBoxRight - last.width);
++    const rowH = s.height / lines.length,
++      scale = Math.min(
++        1,
++        (s.width - 1) / (advance + left + right),
++        (rowH - 1) / (ascent + descent),
++      );
++    ctx.save();
++    ctx.translate(
++      (s.width - (advance + left + right) * scale) / 2,
++      (row + 0.5) * rowH,
++    );
++    ctx.scale(scale, scale);
++    let x = left,
++      baseline = (ascent - descent) / 2;
++    line.forEach((c, i) => {
++      const t = progressInChars - offset - i,
++        m = glyphs[i];
++      if (t > 0) {
++        ctx.save();
++        if (t < 1)
++          reveal(
++            ctx,
++            paths[c],
++            x - m.actualBoundingBoxLeft,
++            baseline - m.actualBoundingBoxAscent,
++            m.actualBoundingBoxRight + m.actualBoundingBoxLeft,
++            m.actualBoundingBoxAscent + m.actualBoundingBoxDescent,
++            t,
++          );
++        ctx.fillText(c, x, baseline);
++        ctx.restore();
++      }
++      x += m.width;
++    });
++    offset += line.length;
++    ctx.restore();
++  });
++  ctx.restore();
++}
+--- /dev/null
++++ b/src/live.ts
+@@ -0,0 +1,106 @@
++import { useEffect, useState } from "react";
++export type Sig = {
++  id: string;
++  name: string;
++  font_id: string;
++  x: number;
++  y: number;
++  width: number;
++  height: number;
++  size: number;
++  rotation: number;
++  split_at?: number;
++  status: "queued" | "writing" | "complete";
++  hidden?: number;
++  created_at: string;
++};
++export type State = {
++  signatures: Sig[];
++  eventName: string;
++  eventStatus: string;
++  animationPaused: boolean;
++  connections: number;
++};
++export async function api<T = any>(
++  path: string,
++  init: RequestInit = {},
++): Promise<T> {
++  const res = await fetch(path, {
++    ...init,
++    headers: {
++      ...(init.body ? { "content-type": "application/json" } : {}),
++      ...init.headers,
++    },
++  });
++  const data = await res.json();
++  if (!res.ok) throw new Error(data.error || "请求失败");
++  return data;
++}
++export function useLive() {
++  const [state, setState] = useState<State>({
++    signatures: [],
++    eventName: "",
++    eventStatus: "loading",
++    connections: 0,
++    animationPaused: false,
++  });
++  const [online, setOnline] = useState(false);
++  useEffect(() => {
++    let timer = 0,
++      closed = false,
++      ws: WebSocket;
++    function connect() {
++      ws = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws");
++      ws.onmessage = (e) => {
++        const { type, data } = JSON.parse(e.data);
++        if (type === "snapshot") {
++          setState(data);
++          setOnline(true);
++          return;
++        }
++        setState((s) => {
++          switch (type) {
++            case "signature.created":
++              return s.signatures.some((x) => x.id === data.id)
++                ? s
++                : { ...s, signatures: [...s.signatures, data] };
++            case "signature.updated":
++              return {
++                ...s,
++                signatures: s.signatures.map((x) =>
++                  x.id === data.id ? { ...x, ...data } : x,
++                ),
++              };
++            case "signature.deleted":
++              return {
++                ...s,
++                signatures: s.signatures.filter((x) => x.id !== data.id),
++              };
++            case "signatures.cleared":
++              return { ...s, signatures: [] };
++            case "settings.updated":
++              return { ...s, ...data };
++            case "connections":
++              return { ...s, connections: data };
++            default:
++              return s;
++          }
++        });
++      };
++      ws.onclose = () => {
++        if (!closed) {
++          setOnline(false);
++          timer = window.setTimeout(connect, 1200);
++        }
++      };
++    }
++    connect();
++    return () => {
++      closed = true;
++      clearTimeout(timer);
++      ws.onmessage = null;
++      ws.close();
++    };
++  }, []);
++  return { ...state, online };
++}
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -1,593 +1,11 @@
+-import React, { useEffect, useRef, useState } from "react";
+ import { createRoot } from "react-dom/client";
+-import QRCode from "qrcode";
++import { Sign } from "./Sign";
++import { Wall } from "./Wall";
++import { Admin } from "./Admin";
+ import "./styles.css";
+-
+-type Sig = {
+-  id: string;
+-  name: string;
+-  font_id: string;
+-  x: number;
+-  y: number;
+-  size: number;
+-  rotation: number;
+-  status: "queued" | "writing" | "complete";
+-  hidden?: number;
+-  created_at: string;
+-};
+-type State = {
+-  signatures: Sig[];
+-  eventName: string;
+-  eventStatus: string;
+-  animationPaused: boolean;
+-  connections: number;
+-};
+-const families: Record<string, string> = {
+-  "ma-shan-zheng": "Ma Shan Zheng",
+-  "zhi-mang-xing": "Zhi Mang Xing",
+-  "source-han-sans": "Noto Sans SC",
+-  "source-han-serif": "Noto Serif SC",
+-  "zcool-xiaowei": "ZCOOL XiaoWei",
+-  "zcool-kuaile": "ZCOOL KuaiLe",
+-  "zcool-qingke": "ZCOOL QingKe HuangYou",
+-};
+-const fontRows = [
+-  ["ma-shan-zheng", "马善政楷书", "东方书法"],
+-  ["zhi-mang-xing", "志莽行书", "东方书法"],
+-  ["source-han-sans", "思源黑体", "现代极简"],
+-  ["source-han-serif", "思源宋体", "古典印刷"],
+-  ["zcool-xiaowei", "站酷小薇体", "古典印刷"],
+-  ["zcool-kuaile", "站酷快乐体", "创意艺术"],
+-  ["zcool-qingke", "站酷庆科黄油体", "创意艺术"],
+-];
+-const cats = [
+-  "东方书法",
+-  "现代极简",
+-  "古典印刷",
+-  "创意艺术",
+-];
+-const family = (id: string) => `"${families[id] || "Noto Sans SC"}",sans-serif`;
+-async function api<T = any>(path: string, init?: RequestInit): Promise<T> {
+-  const res = await fetch(path, {
+-    ...init,
+-    headers: { "content-type": "application/json", ...(init?.headers || {}) },
+-  });
+-  const data = await res.json().catch(() => ({}));
+-  if (!res.ok) throw Error(data.error || "请求失败");
+-  return data;
+-}
+-function useLive() {
+-  const [state, setState] = useState<State>({
+-    signatures: [],
+-    eventName: "四川大学 AI 黑客松",
+-    eventStatus: "open",
+-    animationPaused: false,
+-    connections: 0,
+-  });
+-  useEffect(() => {
+-    let ws: WebSocket;
+-    let timer: number;
+-    api<State>("/api/state").then(setState);
+-    const connect = () => {
+-      ws = new WebSocket(
+-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+-      );
+-      ws.onmessage = (e) => {
+-        const m = JSON.parse(e.data);
+-        if (m.type === "snapshot") setState(m.data);
+-        if (m.type === "signature.created")
+-          setState((v) => ({ ...v, signatures: [...v.signatures, m.data] }));
+-        if (m.type === "signature.updated")
+-          setState((v) => ({
+-            ...v,
+-            signatures: v.signatures.map((x) =>
+-              x.id === m.data.id ? { ...x, ...m.data } : x,
+-            ),
+-          }));
+-        if (m.type === "settings.updated")
+-          setState((v) => ({ ...v, ...m.data }));
+-        if (m.type === "signature.visibility")
+-          api<State>("/api/state").then(setState);
+-        if (m.type === "signature.deleted")
+-          setState((v) => ({
+-            ...v,
+-            signatures: v.signatures.filter((x) => x.id !== m.data.id),
+-          }));
+-        if (m.type === "signatures.cleared")
+-          setState((v) => ({ ...v, signatures: [] }));
+-      };
+-      ws.onclose = () => (timer = window.setTimeout(connect, 1200));
+-    };
+-    connect();
+-    return () => {
+-      clearTimeout(timer);
+-      ws.onclose = null;
+-      ws.close();
+-    };
+-  }, []);
+-  return state;
+-}
+-
+-function Sign() {
+-  const state = useLive(),
+-    [name, setName] = useState(""),
+-    [font, setFont] = useState(fontRows[0][0]),
+-    [cat, setCat] = useState(cats[0]),
+-    [busy, setBusy] = useState(false),
+-    [done, setDone] = useState<Sig>(),
+-    [error, setError] = useState("");
+-  const submit = async () => {
+-    setBusy(true);
+-    setError("");
+-    try {
+-      await document.fonts.load(`64px ${family(font)}`, name);
+-      const canvas = document.createElement("canvas"),
+-        ctx = canvas.getContext("2d")!;
+-      ctx.font = `64px ${family(font)}`;
+-      const m = ctx.measureText(name.trim());
+-      setDone(
+-        await api("/api/signatures", {
+-          method: "POST",
+-          body: JSON.stringify({
+-            name: name.trim(),
+-            fontId: font,
+-            requestId: crypto.randomUUID(),
+-            metrics: {
+-              width: Math.ceil(m.width),
+-              height: Math.ceil(
+-                (m.actualBoundingBoxAscent || 58) +
+-                  (m.actualBoundingBoxDescent || 14),
+-              ),
+-            },
+-          }),
+-        }),
+-      );
+-    } catch (e) {
+-      setError((e as Error).message);
+-    } finally {
+-      setBusy(false);
+-    }
+-  };
+-  if (done)
+-    return (
+-      <main className="mobile success">
+-        <span className="success-mark">✓</span>
+-        <p className="eyebrow">签到已确认</p>
+-        <h1 style={{ fontFamily: family(done.font_id) }}>{done.name}</h1>
+-        <p>你的名字已进入大屏书写队列，可以抬头看看它出现的位置。</p>
+-        <button
+-          className="primary"
+-          onClick={() => {
+-            setDone(undefined);
+-            setName("");
+-          }}
+-        >
+-          继续签到
+-        </button>
+-      </main>
+-    );
+-  return (
+-    <main className="mobile">
+-      <header>
+-        <div className="brand-header">TRAE ON CAMPUS @四川大学</div>
+-        <div className="brand-sub">AI CODING HACKATHON</div>
+-        <h1>
+-          留下你的名字
+-        </h1>
+-        <p className="intro">
+-          让每一个名字，成为 AI 时代的独特印记。输入姓名，选择字体，提交后将在大屏最终位置逐字书写。
+-        </p>
+-      </header>
+-      <section className="form">
+-        <label htmlFor="name">姓名或昵称</label>
+-        <div className="input-row">
+-          <input
+-            id="name"
+-            value={name}
+-            maxLength={12}
+-            placeholder="1–12 个字符"
+-            onChange={(e) => setName(e.target.value)}
+-          />
+-          <span>{name.length}/12</span>
+-        </div>
+-        <div className="preview" style={{ fontFamily: family(font) }}>
+-          {name || "你的名字"}
+-        </div>
+-        <nav className="tabs">
+-          {cats.map((c) => (
+-            <button
+-              key={c}
+-              className={cat === c ? "active" : ""}
+-              onClick={() => setCat(c)}
+-            >
+-              {c}
+-            </button>
+-          ))}
+-        </nav>
+-        <div className="font-grid">
+-          {fontRows
+-            .filter((f) => f[2] === cat)
+-            .map((f) => (
+-              <button
+-                key={f[0]}
+-                className={`font-card ${font === f[0] ? "selected" : ""}`}
+-                onClick={() => setFont(f[0])}
+-              >
+-                <strong style={{ fontFamily: family(f[0]) }}>
+-                  {name || "你的名字"}
+-                </strong>
+-                <small>{f[1]}</small>
+-              </button>
+-            ))}
+-        </div>
+-        {!fontRows.some((f) => f[2] === cat) && (
+-          <div className="font-empty">
+-            这一分类的字体仍在授权核验中，暂未开放。
+-          </div>
+-        )}
+-        <p className="availability">当前开放 7 款已核验字体</p>
+-        {error && <p className="error">{error}</p>}
+-        <button
+-          className="primary"
+-          disabled={!name.trim() || busy || state.eventStatus !== "open"}
+-          onClick={submit}
+-        >
+-          {state.eventStatus !== "open"
+-            ? "签到暂未开放"
+-            : busy
+-              ? "正在确认…"
+-              : "确认签到"}
+-        </button>
+-      </section>
+-    </main>
+-  );
+-}
+-
+-function Wall() {
+-  const state = useLive(),
+-    [qr, setQr] = useState(""),
+-    [cycle, setCycle] = useState(0),
+-    active = useRef(false),
+-    timerRef = useRef<number | undefined>(undefined);
+-  useEffect(() => {
+-    QRCode.toDataURL(location.origin + "/", { width: 320, margin: 1 }).then(
+-      setQr,
+-    );
+-  }, []);
+-  useEffect(
+-    () => () => {
+-      if (timerRef.current) window.clearTimeout(timerRef.current);
+-    },
+-    [],
+-  );
+-  useEffect(() => {
+-    if (active.current || state.animationPaused) return;
+-    const next = state.signatures.find((x) => x.status !== "complete");
+-    if (!next) return;
+-    active.current = true;
+-    api(`/api/signatures/${next.id}/status`, {
+-      method: "PATCH",
+-      body: JSON.stringify({ status: "writing" }),
+-    }).catch(() => {});
+-    timerRef.current = window.setTimeout(() => {
+-      api(`/api/signatures/${next.id}/status`, {
+-        method: "PATCH",
+-        body: JSON.stringify({ status: "complete" }),
+-      })
+-        .catch(() => {})
+-        .finally(() => {
+-          active.current = false;
+-          timerRef.current = undefined;
+-          setCycle((v) => v + 1);
+-        });
+-    }, Math.max(1500, Math.min(3000, [...next.name].length * 650)));
+-  }, [state.signatures, state.animationPaused, cycle]);
+-  return (
+-    <main className="wall">
+-      <header className="wall-header">
+-        <div className="wall-brand">
+-          <div className="wall-brand-title">TRAE ON CAMPUS @四川大学</div>
+-          <div className="wall-brand-sub">AI CODING HACKATHON</div>
+-        </div>
+-        <div className="wall-count">
+-          <div className="wall-count-num">{String(state.signatures.length).padStart(3, '0')}</div>
+-          <div className="wall-count-label">SIGNED</div>
+-          <div className="wall-live">
+-            <span className="wall-live-text">LIVE</span>
+-          </div>
+-        </div>
+-      </header>
+-      <div className="canvas">
+-        {state.signatures.map((s) => (
+-          <div
+-            key={s.id}
+-            className={`signature ${s.status}`}
+-            style={{
+-              left: `${s.x / 19.2}%`,
+-              top: `${s.y / 10.8}%`,
+-              fontSize: `${s.size / 19.2}vw`,
+-              transform: `rotate(${s.rotation}deg)`,
+-              fontFamily: family(s.font_id),
+-            }}
+-          >
+-            {[...s.name].map((c, i) => (
+-              <span key={i} style={{ animationDelay: `${i * 0.58}s` }}>
+-                {c}
+-              </span>
+-            ))}
+-          </div>
+-        ))}
+-      </div>
+-      <aside className="qr">
+-        {qr && <img src={qr} alt="手机签到二维码" />}
+-        <div className="qr-title">扫码签到</div>
+-        <div className="qr-sub">留下你的名字</div>
+-      </aside>
+-      {state.animationPaused && <div className="paused">书写已暂停</div>}
+-    </main>
+-  );
+-}
+-
+-function Admin() {
+-  const state = useLive(),
+-    [token, setToken] = useState(sessionStorage.getItem("admin-token") || ""),
+-    [password, setPassword] = useState(""),
+-    [query, setQuery] = useState(""),
+-    [message, setMessage] = useState(""),
+-    [showHidden, setShowHidden] = useState(false),
+-    [hiddenList, setHiddenList] = useState<Sig[]>([]);
+-  const refreshHidden = async () => {
+-    if (!token) return;
+-    try {
+-      const all = await api<Sig[]>("/api/admin/signatures", {
+-        headers: { authorization: `Bearer ${token}` },
+-      });
+-      setHiddenList(all.filter((s) => s.hidden));
+-    } catch {}
+-  };
+-  useEffect(() => {
+-    refreshHidden();
+-  }, [token]);
+-  const call = async (path: string, init: RequestInit = {}) => {
+-    try {
+-      const data = await api(path, {
+-        ...init,
+-        headers: { authorization: `Bearer ${token}`, ...(init.headers || {}) },
+-      });
+-      setMessage("操作已保存");
+-      refreshHidden();
+-      return data;
+-    } catch (e) {
+-      setMessage((e as Error).message);
+-    }
+-  };
+-  if (!token)
+-    return (
+-      <main className="admin-login">
+-        <p className="eyebrow">SIGNATURE WALL</p>
+-        <h1>管理签到墙</h1>
+-        <label>
+-          管理员密码
+-          <input
+-            type="password"
+-            value={password}
+-            onChange={(e) => setPassword(e.target.value)}
+-          />
+-        </label>
+-        {message && <p className="error">{message}</p>}
+-        <button
+-          className="primary"
+-          onClick={async () => {
+-            try {
+-              const d = await api("/api/admin/login", {
+-                method: "POST",
+-                body: JSON.stringify({ password }),
+-              });
+-              sessionStorage.setItem("admin-token", d.token);
+-              setMessage("");
+-              setToken(d.token);
+-            } catch (e) {
+-              setMessage((e as Error).message);
+-            }
+-          }}
+-        >
+-          登录后台
+-        </button>
+-      </main>
+-    );
+-  const settings = (data: object) =>
+-    call("/api/admin/settings", { method: "PUT", body: JSON.stringify(data) });
+-  const export4k = () => {
+-    const c = document.createElement("canvas");
+-    c.width = 3840;
+-    c.height = 2160;
+-    const x = c.getContext("2d")!;
+-    x.fillStyle = "#fafaf8";
+-    x.fillRect(0, 0, c.width, c.height);
+-    x.fillStyle = "#1d1d1f";
+-    state.signatures.forEach((s) => {
+-      x.save();
+-      x.translate(s.x * 2, s.y * 2);
+-      x.rotate((s.rotation * Math.PI) / 180);
+-      x.font = `${s.size * 2}px ${family(s.font_id)}`;
+-      x.textBaseline = "top";
+-      x.fillText(s.name, 0, 0);
+-      x.restore();
+-    });
+-    const a = document.createElement("a");
+-    a.download = "signature-wall-4k.png";
+-    a.href = c.toDataURL();
+-    a.click();
+-  };
+-  const exportCsv = () => {
+-    const all = [
+-      ...state.signatures,
+-      ...hiddenList.filter(
+-        (h) => !state.signatures.some((v) => v.id === h.id),
+-      ),
+-    ];
+-    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+-    const head = ["姓名", "字体", "字体ID", "状态", "签到时间"].map(esc);
+-    const rows = all.map((s) =>
+-      [
+-        s.name,
+-        fontRows.find((f) => f[0] === s.font_id)?.[1] || "",
+-        s.font_id,
+-        s.status,
+-        s.created_at,
+-      ]
+-        .map(esc)
+-        .join(","),
+-    );
+-    const csv = "\uFEFF" + [head.join(","), ...rows].join("\r\n");
+-    const a = document.createElement("a");
+-    a.download = "signature-wall-records.csv";
+-    a.href = URL.createObjectURL(
+-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+-    );
+-    a.click();
+-    URL.revokeObjectURL(a.href);
+-  };
+-  return (
+-    <main className="admin">
+-      <header>
+-        <div>
+-          <p className="eyebrow">SIGNATURE WALL</p>
+-          <h1>现场控制台</h1>
+-        </div>
+-        <div className="header-actions">
+-          <a href="/wall" target="_blank">
+-            打开大屏
+-          </a>
+-          <button onClick={exportCsv}>导出签到记录</button>
+-          <button onClick={export4k}>导出 4K 纪念图</button>
+-        </div>
+-      </header>
+-      <section className="admin-section">
+-        <h2>活动管理</h2>
+-        <div className="controls">
+-          <button onClick={() => settings({ eventStatus: "open" })}>
+-            开启签到
+-          </button>
+-          <button onClick={() => settings({ eventStatus: "paused" })}>
+-            暂停签到
+-          </button>
+-          <button onClick={() => settings({ eventStatus: "ended" })}>
+-            结束签到
+-          </button>
+-          <button
+-            onClick={() =>
+-              settings({ animationPaused: !state.animationPaused })
+-            }
+-          >
+-            {state.animationPaused ? "恢复动画" : "暂停动画"}
+-          </button>
+-          <button onClick={() => call("/api/admin/replay", { method: "POST" })}>
+-            重播最近姓名
+-          </button>
+-          <button
+-            onClick={() => {
+-              if (window.confirm("确认清空全部签到数据？此操作不可恢复。"))
+-                call("/api/admin/signatures", { method: "DELETE" });
+-            }}
+-          >
+-            清空全部签到
+-          </button>
+-          <span>
+-            {state.signatures.length} 人在墙 · {hiddenList.length} 已隐藏 ·{" "}
+-            {state.connections} 个连接
+-          </span>
+-        </div>
+-      </section>
+-      <section className="admin-section">
+-        <div className="section-head">
+-          <h2>签到记录</h2>
+-          <div className="section-actions">
+-            <input
+-              value={query}
+-              placeholder="搜索姓名"
+-              onChange={(e) => setQuery(e.target.value)}
+-            />
+-            <button onClick={() => setShowHidden((v) => !v)}>
+-              {showHidden ? "收起已隐藏" : "显示已隐藏"}
+-            </button>
+-          </div>
+-        </div>
+-        <div className="records">
+-          {(showHidden
+-            ? [
+-                ...state.signatures,
+-                ...hiddenList.filter(
+-                  (h) => !state.signatures.some((v) => v.id === h.id),
+-                ),
+-              ]
+-            : state.signatures
+-          )
+-            .filter((s) => s.name.includes(query))
+-            .map((s) => (
+-              <article key={s.id} className={s.hidden ? "is-hidden" : ""}>
+-                <b style={{ fontFamily: family(s.font_id) }}>{s.name}</b>
+-                <span>{fontRows.find((f) => f[0] === s.font_id)?.[1]}</span>
+-                <time>{new Date(s.created_at).toLocaleString()}</time>
+-                <span>{s.hidden ? "已隐藏" : s.status}</span>
+-                <span className="row-actions">
+-                  {s.hidden ? (
+-                    <button
+-                      onClick={() =>
+-                        call(`/api/admin/signatures/${s.id}`, {
+-                          method: "PATCH",
+-                          body: JSON.stringify({ hidden: false }),
+-                        })
+-                      }
+-                    >
+-                      恢复
+-                    </button>
+-                  ) : (
+-                    <>
+-                      <button
+-                        onClick={() =>
+-                          call(`/api/admin/signatures/${s.id}`, {
+-                            method: "PATCH",
+-                            body: JSON.stringify({ hidden: true }),
+-                          })
+-                        }
+-                      >
+-                        隐藏
+-                      </button>
+-                      <button
+-                        onClick={() => {
+-                          if (window.confirm(`确认删除「${s.name}」？`))
+-                            call(`/api/admin/signatures/${s.id}`, {
+-                              method: "DELETE",
+-                            });
+-                        }}
+-                      >
+-                        删除
+-                      </button>
+-                    </>
+-                  )}
+-                </span>
+-              </article>
+-            ))}
+-        </div>
+-      </section>
+-      <section className="admin-section">
+-        <h2>字体授权</h2>
+-        <p>
+-          已开放 7 款 SIL OFL 字体，均经过 Google Fonts 分发验证，支持网页嵌入使用。
+-        </p>
+-      </section>
+-      {message && <div className="toast">{message}</div>}
+-    </main>
+-  );
+-}
+-function App() {
+-  return location.pathname.startsWith("/wall") ? (
+-    <Wall />
+-  ) : location.pathname.startsWith("/admin") ? (
+-    <Admin />
+-  ) : (
+-    <Sign />
+-  );
+-}
+-createRoot(document.getElementById("root")!).render(<App />);
++const Page = location.pathname.startsWith("/wall")
++  ? Wall
++  : location.pathname.startsWith("/admin")
++    ? Admin
++    : Sign;
++createRoot(document.getElementById("root")!).render(<Page />);
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -1,4 +1,809 @@
+-@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Sans+SC:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;600&family=ZCOOL+KuaiLe&family=ZCOOL+QingKe+HuangYou&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&family=JetBrains+Mono:wght@400;600&display=swap');
+-:root{--brand-green:#20EA89;--brand-black:#0B0B0B;--brand-bg:#ECEBF0;--brand-white:#FFFFFF;--bg:#fafaf8;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5e5;--card:#fff;font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*{box-sizing:border-box}body{margin:0;background:var(--bg)}button,input{font:inherit}button{cursor:pointer}h1{font-size:42px;line-height:1.08;letter-spacing:-.04em;margin:18px 0}h2{letter-spacing:-.02em}p{color:var(--muted);line-height:1.7}.eyebrow{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}.eyebrow-sub{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:6px 0 0;opacity:.7}.mobile{width:min(100%,520px);min-height:100vh;margin:auto;padding:48px 24px 80px;background:var(--brand-bg)}.intro{max-width:390px}.brand-header{display:inline-block;background:var(--brand-green);color:var(--brand-black);padding:6px 16px;font-size:13px;font-weight:700;letter-spacing:.2em;margin-bottom:8px}.brand-sub{display:inline-block;background:var(--brand-black);color:var(--brand-white);padding:4px 16px;font-size:11px;font-weight:700;letter-spacing:.25em;font-family:'JetBrains Mono',monospace;margin-bottom:20px}.form{margin-top:48px}label{font-size:14px;font-weight:600}input{display:block;width:100%;height:54px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:0 16px;margin-top:10px;outline:none}input:focus{border-color:var(--ink)}.input-row{position:relative}.input-row span{position:absolute;right:16px;top:27px;color:var(--muted);font-size:12px}.input-row input{padding-right:58px}.preview{height:150px;display:grid;place-items:center;font-size:48px;overflow:hidden}.tabs{display:flex;gap:8px;overflow:auto;padding:4px 0 16px}.tabs button{white-space:nowrap;border:0;background:transparent;color:var(--muted);padding:10px 8px}.tabs .active{color:var(--ink);border-bottom:1px solid var(--ink)}.font-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.font-card{height:108px;border:1px solid var(--line);border-radius:14px;background:var(--card);display:flex;flex-direction:column;justify-content:center;gap:10px;transition:transform 180ms,border-color 180ms}.font-card:hover{transform:translateY(-2px)}.font-card:active{transform:translateY(0)}.font-card.selected{border-color:var(--ink)}.font-card strong{font-size:26px;font-weight:400}.font-card small{color:var(--muted)}.font-empty{padding:36px 20px;border:1px dashed var(--line);color:var(--muted);text-align:center}.availability{font-size:12px;margin:16px 0 0}.error{color:#b42318;font-size:14px}.primary{width:100%;height:54px;border:0;border-radius:8px;background:var(--brand-green);color:var(--brand-black);margin-top:24px;font-weight:700;font-size:15px;letter-spacing:.02em;transition:transform 160ms,box-shadow 160ms}.primary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(32,234,137,.3)}.primary:active{transform:translateY(0);box-shadow:0 2px 6px rgba(32,234,137,.2)}.primary:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}.success{align-content:center;text-align:center;display:grid}.success-mark{width:64px;height:64px;display:grid;place-items:center;margin:0 auto 24px;border:2px solid var(--ink);border-radius:50%;font-size:26px;background:var(--bg)}
+-.wall{width:100vw;height:100vh;overflow:hidden;position:relative;background:var(--brand-bg)}.wall::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 40px,rgba(11,11,11,.015) 40px,rgba(11,11,11,.015) 41px),repeating-linear-gradient(90deg,transparent,transparent 40px,rgba(11,11,11,.015) 40px,rgba(11,11,11,.015) 41px);pointer-events:none}.wall-header{position:absolute;z-index:10;left:0;right:0;top:0;padding:32px 48px;display:flex;justify-content:space-between;align-items:flex-start}.wall-brand{display:flex;flex-direction:column;gap:6px}.wall-brand-title{background:var(--brand-green);color:var(--brand-black);padding:10px 20px;font-size:24px;font-weight:800;letter-spacing:.08em;line-height:1.2}.wall-brand-sub{background:var(--brand-black);color:var(--brand-white);padding:8px 20px;font-size:16px;font-weight:700;letter-spacing:.15em;font-family:'JetBrains Mono',monospace}.wall-count{display:flex;flex-direction:column;align-items:flex-end;gap:4px}.wall-count-num{font-family:'JetBrains Mono',monospace;font-size:56px;font-weight:700;color:var(--brand-black);line-height:1;letter-spacing:-.02em}.wall-count-label{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);letter-spacing:.2em;font-weight:600}.wall-live{display:inline-flex;align-items:center;gap:6px;margin-top:4px}.wall-live::before{content:'';width:8px;height:8px;background:var(--brand-green);border-radius:50%;animation:pulse 2s ease-in-out infinite}.wall-live-text{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.15em;color:var(--muted);font-weight:600}.canvas{position:absolute;inset:0}.signature{position:absolute;white-space:nowrap;line-height:1.1;transform-origin:left top}.signature span{display:inline-block}.signature.queued{visibility:hidden}.signature.writing span{clip-path:inset(0 100% 0 0);animation:write .58s cubic-bezier(.22,.8,.28,1) forwards;will-change:clip-path}.signature.complete span{clip-path:none}.qr{position:absolute;right:4vw;bottom:4vh;background:var(--brand-white);padding:20px;display:flex;flex-direction:column;gap:12px;align-items:center;border:3px solid var(--brand-black);box-shadow:0 4px 16px rgba(11,11,11,.12)}.qr img{width:140px;height:140px}.qr-title{font-size:16px;font-weight:700;color:var(--brand-black);letter-spacing:.05em}.qr-sub{font-size:13px;color:var(--muted);font-weight:500}.paused{position:absolute;left:50%;bottom:4vh;transform:translateX(-50%);background:var(--ink);color:white;padding:10px 16px;border-radius:999px;font-size:13px}
+-.admin{max-width:1120px;margin:auto;padding:64px 32px}.admin header{display:flex;align-items:end;justify-content:space-between}.admin h1{margin-bottom:0}.admin a{color:var(--ink)}.admin-login{max-width:420px;margin:16vh auto;padding:32px}.admin-login label{display:block;margin-top:32px}.header-actions{display:flex;gap:10px}.header-actions a,.header-actions button,.setting-row button{height:42px;padding:0 16px;border:1px solid var(--line);background:white;border-radius:9px;color:var(--ink);display:inline-flex;align-items:center;text-decoration:none;transition:transform 160ms,border-color 160ms}.header-actions a:hover,.header-actions button:hover,.setting-row button:hover{border-color:var(--ink);transform:translateY(-1px)}.admin-section{margin-top:36px;padding-top:28px;border-top:1px solid var(--line)}.setting-row{display:grid;grid-template-columns:1fr auto;gap:10px;max-width:680px}.setting-row input{margin:0}.controls{display:flex;align-items:center;gap:12px;padding:24px 0}.controls button,.records button{height:42px;padding:0 16px;border:1px solid var(--line);background:#fff;border-radius:9px;transition:transform 160ms,border-color 160ms}.controls button:hover,.records button:hover{border-color:var(--ink);transform:translateY(-1px)}.controls span{margin-left:auto}.section-head{display:flex;justify-content:space-between;align-items:center}.section-head input{width:280px;margin:0}.section-actions{display:flex;gap:10px;align-items:center}.section-head button{height:42px;padding:0 16px;border:1px solid var(--line);background:#fff;border-radius:9px;transition:transform 160ms,border-color 160ms}.section-head button:hover{border-color:var(--ink);transform:translateY(-1px)}.row-actions{display:flex;gap:8px}.records article.is-hidden{opacity:.55}.records{margin-top:18px}.records article{display:grid;grid-template-columns:1.5fr 1.5fr 1.5fr .8fr auto;gap:16px;align-items:center;min-height:64px;border-bottom:1px solid var(--line)}.records article b{font-size:24px;font-weight:400}.records span,.records time{color:var(--muted);font-size:13px}.font-table>div{display:grid;grid-template-columns:2fr 1.5fr 1fr 1.5fr;gap:16px;align-items:center;min-height:48px;border-bottom:1px solid var(--line);font-size:14px}.ok{color:#16794b}.pending{color:var(--muted)}.toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px}@keyframes write{to{clip-path:inset(0 0 0 0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.signature.writing span{clip-path:none}}@media(max-width:700px){.mobile{padding-top:34px;padding-bottom:120px}h1{font-size:38px}.wall-header{padding:24px;flex-direction:column;gap:20px}.wall-brand-title{font-size:20px}.wall-brand-sub{font-size:14px}.wall-count-num{font-size:42px}.admin{padding:32px 20px}.admin header{align-items:start}.header-actions{flex-direction:column}.controls{flex-wrap:wrap}.controls span{width:100%;margin:0}.section-head{align-items:stretch;gap:16px;flex-direction:column}.section-head input{width:100%}.records article{grid-template-columns:1fr auto}.records article span,.records article time{display:none}.font-table>div{grid-template-columns:1fr 1fr}.font-table>div span:last-child{display:none}.form{margin-top:36px}.font-grid{gap:10px}.font-card{height:96px}}
++:root {
++  font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
++  color: #24212a;
++  background: #191721;
++  font-synthesis: none;
++  --ink: #191721;
++  --paper: #f5f1eb;
++  --line: #d4cdc5;
++  --coral: #ffa47f;
++  --lilac: #d3bcf3;
++}
++* {
++  box-sizing: border-box;
++}
++body {
++  margin: 0;
++}
++button,
++input,
++a {
++  font: inherit;
++}
++button,
++a {
++  touch-action: manipulation;
++}
++button {
++  cursor: pointer;
++  color: inherit;
++}
++button:focus-visible,
++input:focus-visible,
++a:focus-visible {
++  outline: 3px solid #9260c4;
++  outline-offset: 3px;
++}
++button:disabled {
++  cursor: default;
++}
++button {
++  border: 0;
++}
++h1,
++h2,
++h3,
++p {
++  margin: 0;
++}
++.micro,
++.card-no,
++.proof-foot,
++.poster-meta,
++.eyebrow,
++.receipt dt {
++  font-family: "Courier New", monospace;
++  font-size: 11px;
++  letter-spacing: 0.09em;
++}
++.studio {
++  min-height: 100svh;
++  display: grid;
++  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
++  background: var(--paper);
++}
++.poster {
++  position: sticky;
++  top: 0;
++  height: 100svh;
++  min-height: 590px;
++  color: #f6eee7;
++  isolation: isolate;
++  overflow: hidden;
++  display: flex;
++  flex-direction: column;
++  padding: clamp(26px, 3.4vw, 64px);
++}
++.poster canvas {
++  position: absolute;
++  inset: 0;
++  width: 100%;
++  height: 100%;
++  z-index: -1;
++}
++.brand {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  font-size: clamp(16px, 1.5vw, 24px);
++  font-weight: 700;
++  letter-spacing: -0.045em;
++}
++.brand em {
++  font-weight: 400;
++  font-style: normal;
++}
++.brand .campus {
++  font-size: 0.68em;
++  border-left: 1px solid #8c818e;
++  padding-left: 12px;
++  letter-spacing: 0.02em;
++}
++.seal {
++  width: 34px;
++  height: 34px;
++  flex: none;
++  color: var(--coral);
++}
++.poster-heading {
++  margin-top: clamp(48px, 8.5vh, 100px);
++}
++.kicker {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  color: #e0cfdc;
++  letter-spacing: 0.16em;
++}
++.kicker i,
++.live-pill i,
++.receipt-status i,
++.admin-state i {
++  display: inline-block;
++  width: 6px;
++  height: 6px;
++  background: #cf6b48;
++  border-radius: 100%;
++}
++.kicker i {
++  width: 22px;
++  height: 2px;
++  border-radius: 0;
++  background: var(--coral);
++}
++.poster h1 {
++  font-family: Georgia, "Times New Roman", serif;
++  font-size: clamp(65px, 8.4vw, 148px);
++  letter-spacing: -0.075em;
++  line-height: 1.05;
++  font-weight: 400;
++  margin: 9px 0 2px;
++}
++.poster h1 em {
++  color: var(--lilac);
++  font-weight: 400;
++}
++.poster-zh {
++  font-size: 18px;
++  letter-spacing: 0.15em;
++  color: #d2c5d8;
++}
++.poster-foot {
++  margin-top: auto;
++}
++.poster-event {
++  font-size: clamp(22px, 2.6vw, 46px);
++  letter-spacing: -0.05em;
++  font-weight: 500;
++  margin-bottom: 17px;
++}
++.poster-meta {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 6px;
++  border-top: 1px solid #65596a;
++  padding-top: 14px;
++  font-size: 12px;
++  color: #c5b6c9;
++}
++.poster-meta b {
++  color: var(--coral);
++  font-weight: 400;
++}
++.desk {
++  width: 100%;
++  max-width: 740px;
++  align-self: center;
++  justify-self: center;
++  padding: clamp(28px, 3.8vw, 65px) clamp(26px, 4.2vw, 76px);
++}
++.desk-top,
++.name-label,
++.spec-head,
++.proof-head,
++.proof-foot,
++.receipt-top,
++.receipt dl div {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 8px;
++}
++.desk-top > .micro {
++  color: #5f5665;
++  font-weight: bold;
++  letter-spacing: 0.14em;
++}
++.live-pill {
++  display: flex;
++  align-items: center;
++  gap: 7px;
++  font-size: 11px;
++  color: #61443c;
++}
++.desk h2 {
++  font-size: clamp(32px, 3.1vw, 55px);
++  margin: 13px 0 28px;
++  letter-spacing: -0.06em;
++  line-height: 1.22;
++  font-weight: 680;
++}
++.desk h2 span {
++  color: #c16b4a;
++  margin-left: 0.05em;
++}
++.name-label {
++  font-size: 14px;
++  font-weight: 650;
++}
++.name-label .micro,
++.spec-head .micro {
++  font-weight: 400;
++  color: #6d626e;
++}
++#name {
++  width: 100%;
++  border: 0;
++  border-bottom: 1px solid #9b8e9e;
++  background: transparent;
++  border-radius: 0;
++  padding: 12px 2px;
++  font-size: 18px;
++  color: var(--ink);
++  transition: border-color 0.2s;
++}
++#name:focus {
++  outline: 0;
++  border-color: #824d97;
++  box-shadow: 0 1px #824d97;
++}
++#name::placeholder {
++  font-size: 17px;
++  color: #897e83;
++}
++.proof {
++  position: relative;
++  isolation: isolate;
++  background-color: #282235;
++  color: #eae0e9;
++  margin: 20px 0 22px;
++  padding: 12px 16px 11px;
++  overflow: hidden;
++}
++.proof:before {
++  content: "";
++  position: absolute;
++  inset: 0;
++  z-index: -1;
++  background-image:
++    linear-gradient(90deg, #b5a2ca0d 1px, transparent 1px),
++    linear-gradient(#b5a2ca0d 1px, transparent 1px);
++  background-size: 21px 21px;
++}
++.proof-head,
++.proof-foot {
++  color: #c0accf;
++  font-size: 10px;
++}
++.proof-foot {
++  font-size: 9px;
++}
++.proof-head button {
++  min-height: 32px;
++  padding: 4px 7px;
++  color: #d9c3e8;
++  font-size: 12px;
++  background: #42354e;
++}
++.preview {
++  position: relative;
++  display: grid;
++  place-items: center;
++  height: 77px;
++  margin: 0 4px 4px;
++}
++.preview:before,
++.preview:after {
++  position: absolute;
++  top: 48%;
++  content: "+";
++  color: #977f9e;
++  font: 14px monospace;
++  left: -4px;
++}
++.preview:after {
++  left: auto;
++  right: -4px;
++}
++.preview canvas {
++  display: block;
++  width: min(100%, 350px);
++  height: auto;
++  max-height: 74px;
++  object-fit: contain;
++}
++.spec-head h3 {
++  font-size: 18px;
++  letter-spacing: -0.025em;
++}
++.tabs {
++  display: flex;
++  gap: 4px;
++  margin: 12px 0;
++}
++.tabs button {
++  min-height: 36px;
++  padding: 7px 17px;
++  border: 1px solid var(--line);
++  background: transparent;
++  border-radius: 100px;
++  font-size: 13px;
++  transition: background 0.15s;
++}
++.tabs .active {
++  background: var(--ink);
++  border-color: var(--ink);
++  color: var(--paper);
++}
++.font-grid {
++  display: grid;
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 8px;
++  max-height: 218px;
++  overflow-y: auto;
++  scrollbar-width: thin;
++  align-content: start;
++}
++.font-card {
++  position: relative;
++  text-align: left;
++  background: #efebe5;
++  border: 1px solid var(--line);
++  min-height: 88px;
++  padding: 9px 11px 8px;
++  transition:
++    background 0.15s,
++    border-color 0.15s;
++}
++.font-card.selected {
++  background: #e9dded;
++  border-color: #80608c;
++}
++.card-no {
++  font-size: 9px;
++  color: #766b77;
++  position: absolute;
++  top: 7px;
++  left: 9px;
++}
++.check {
++  position: absolute;
++  top: 7px;
++  right: 7px;
++  font-size: 10px;
++  line-height: 14px;
++  text-align: center;
++}
++.selected .check {
++  background: #675075;
++  color: white;
++  width: 14px;
++  height: 14px;
++  border-radius: 50%;
++}
++.font-card strong {
++  display: block;
++  font-size: 30px;
++  font-weight: 400;
++  line-height: 1.35;
++  margin: 6px 0 2px;
++  white-space: nowrap;
++}
++.font-card small {
++  display: block;
++  font-size: 11px;
++  color: #5d535f;
++}
++.primary {
++  width: 100%;
++  min-height: 52px;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 10px;
++  padding: 12px 19px;
++  background: #eda282;
++  color: #281d21;
++  font-size: 16px;
++  font-weight: 650;
++  margin-top: 22px;
++  border: 1px solid #c58d79;
++  transition: background 0.18s;
++}
++.primary:not(:disabled):hover {
++  background: #ffb997;
++}
++.primary:disabled {
++  background: #dfd4cc;
++  border-color: #d2c6be;
++  color: #6d6164;
++}
++.primary span {
++  font-size: 22px;
++}
++.coverage,
++.error {
++  font-size: 13px;
++  line-height: 1.5;
++  margin: 8px 0;
++  color: #823f37;
++}
++.coverage {
++  color: #645866;
++}
++.error button {
++  text-decoration: underline;
++  background: none;
++}
++.success,
++.admin-login {
++  min-height: 100svh;
++  background: #191622;
++  display: grid;
++  place-content: center;
++  padding: 22px;
++}
++.receipt {
++  background: var(--paper);
++  padding: 30px;
++  max-width: 480px;
++  width: min(420px, calc(100vw - 44px));
++  border-top: 6px solid var(--coral);
++}
++.receipt-top {
++  border-bottom: 1px solid var(--line);
++  padding-bottom: 14px;
++}
++.receipt .seal {
++  color: #7a557f;
++}
++.receipt-status {
++  font-size: 14px;
++  margin: 28px 0 10px;
++  color: #735665;
++}
++.receipt-status i {
++  margin-right: 5px;
++}
++.receipt h1 {
++  font-size: clamp(36px, 8vw, 68px);
++  font-weight: 400;
++  overflow-wrap: anywhere;
++  margin: 12px 0;
++}
++.receipt p {
++  font-size: 14px;
++  color: #655b68;
++  line-height: 1.6;
++}
++.receipt dl {
++  border-block: 1px dashed #b6a9b6;
++  padding: 12px 0;
++}
++.receipt dl div {
++  padding: 4px 0;
++}
++.receipt dt,
++.receipt dd {
++  font-size: 12px;
++}
++.receipt dd {
++  font-family: monospace;
++}
++.wall {
++  position: fixed;
++  inset: 0;
++  background: #100e18;
++  overflow: hidden;
++}
++.board {
++  position: absolute;
++  top: 50%;
++  left: 50%;
++  width: 1920px;
++  height: 1080px;
++}
++.board > canvas {
++  position: absolute;
++  inset: 0;
++}
++.signature {
++  position: absolute;
++  transform-origin: top left;
++}
++.signature canvas {
++  display: block;
++  width: 100%;
++  height: 100%;
++}
++.signature.queued {
++  visibility: hidden;
++}
++.qr-link {
++  position: absolute;
++  bottom: 30px;
++  right: 50px;
++  width: 170px;
++  height: 170px;
++}
++.wall-note {
++  position: absolute;
++  bottom: 10px;
++  left: 50%;
++  color: #ffc2a1;
++}
++.sr-only {
++  position: absolute;
++  width: 1px;
++  height: 1px;
++  overflow: hidden;
++  clip-path: inset(50%);
++  white-space: nowrap;
++}
++.admin-login {
++  color: var(--paper);
++  justify-items: stretch;
++  grid-template-columns: minmax(0, 360px);
++}
++.admin-login label {
++  display: grid;
++  gap: 10px;
++}
++.admin-login h1 {
++  font-size: 40px;
++  margin: 20px 0 32px;
++}
++.eyebrow {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++}
++.admin-login .primary {
++  justify-content: center;
++}
++.admin input,
++.admin-login input {
++  border: 1px solid #b9adb9;
++  background: #fffaf5;
++  border-radius: 0;
++  padding: 12px 14px;
++  color: #29202f;
++}
++.admin {
++  min-height: 100svh;
++  background: var(--paper);
++  padding: 36px max(5vw, calc((100vw - 1380px) / 2));
++}
++.admin > header,
++.section-head,
++.header-actions,
++.section-actions,
++.controls {
++  display: flex;
++  justify-content: space-between;
++  align-items: center;
++  gap: 12px;
++  flex-wrap: wrap;
++}
++.admin .seal {
++  color: #9b649d;
++}
++.admin h1 {
++  font-size: 40px;
++  margin-top: 12px;
++}
++.admin h2 {
++  font-size: 22px;
++}
++.admin-section {
++  border-top: 1px solid #978b99;
++  margin-top: 30px;
++  padding: 23px 0 0;
++}
++.admin-section > p,
++.admin-state {
++  margin: 12px 0;
++  color: #675b69;
++  font-size: 14px;
++}
++.admin button,
++.admin a {
++  display: inline-block;
++  border: 1px solid #bdb2bd;
++  padding: 10px 14px;
++  font-size: 14px;
++  color: var(--ink);
++  text-decoration: none;
++  background: #ece4e8;
++}
++.admin .header-actions button:last-child,
++.admin .header-actions a {
++  background: var(--ink);
++  color: var(--paper);
++}
++.admin .controls {
++  justify-content: flex-start;
++}
++.controls > span {
++  font: 13px monospace;
++}
++.admin-state i {
++  margin-right: 5px;
++}
++.records {
++  margin-top: 16px;
++}
++.records article {
++  display: grid;
++  grid-template-columns: minmax(100px, 1.1fr) minmax(80px, 0.9fr) minmax(
++      140px,
++      1fr
++    ) 0.5fr 1fr;
++  align-items: center;
++  gap: 12px;
++  border-bottom: 1px solid var(--line);
++  padding: 10px 0;
++}
++.records b {
++  font-weight: 400;
++  font-size: 24px;
++  overflow-wrap: anywhere;
++}
++.records span,
++.records time {
++  font-size: 13px;
++}
++.records .row-actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: 5px;
++}
++.is-hidden {
++  opacity: 0.65;
++}
++.toast {
++  position: fixed;
++  bottom: 22px;
++  right: 22px;
++  background: var(--ink);
++  color: var(--paper);
++  padding: 11px 18px;
++  font-size: 14px;
++}
++@media (hover: hover) {
++  .font-card:hover {
++    border-color: #8b7194;
++  }
++  .tabs button:not(.active):hover {
++    background: #e8e0e7;
++  }
++}
++@media (max-width: 760px) {
++  .studio {
++    display: block;
++  }
++  .poster {
++    position: relative;
++    height: 272px;
++    min-height: 0;
++    padding: 20px 22px 16px;
++  }
++  .brand {
++    gap: 7px;
++    font-size: 16px;
++  }
++  .seal {
++    width: 27px;
++    height: 27px;
++  }
++  .brand .campus {
++    padding-left: 8px;
++  }
++  .poster-heading {
++    margin-top: 22px;
++  }
++  .poster h1 {
++    font-size: clamp(56px, 12vw, 85px);
++    margin: 4px 0 0;
++  }
++  .poster-zh {
++    font-size: 13px;
++  }
++  .kicker {
++    font-size: 9px;
++  }
++  .poster-event {
++    font-size: 23px;
++    margin-bottom: 8px;
++  }
++  .poster-meta {
++    padding-top: 8px;
++    font-size: 10px;
++  }
++  .desk {
++    padding: 22px 22px 28px;
++    max-width: 620px;
++    margin: auto;
++  }
++  .desk h2 {
++    font-size: 30px;
++    margin: 8px 0 17px;
++  }
++  .desk-top .micro {
++    font-size: 9px;
++  }
++  .name-label {
++    font-size: 13px;
++  }
++  #name {
++    padding: 9px 0 11px;
++  }
++  .proof {
++    margin: 15px 0 16px;
++    padding: 8px 12px;
++  }
++  .preview {
++    height: 60px;
++  }
++  .preview canvas {
++    height: 62px;
++    width: auto;
++    max-width: 100%;
++  }
++  .tabs {
++    margin: 9px 0;
++    gap: 7px;
++  }
++  .tabs button {
++    min-height: 42px;
++    padding: 7px 15px;
++  }
++  .font-grid {
++    display: flex;
++    overflow-x: auto;
++    overflow-y: hidden;
++    scroll-snap-type: x proximity;
++    max-height: none;
++    scrollbar-width: thin;
++    padding-bottom: 3px;
++  }
++  .font-card {
++    min-width: 96px;
++    min-height: 86px;
++    scroll-snap-align: start;
++  }
++  .font-card strong {
++    font-size: 29px;
++  }
++  .primary {
++    margin-top: 13px;
++    min-height: 50px;
++  }
++  .admin {
++    padding: 23px 17px;
++  }
++  .records article {
++    grid-template-columns: 1fr 1fr;
++  }
++  .row-actions {
++    grid-column: 1/-1;
++  }
++}
++@media (max-width: 365px) {
++  .poster {
++    height: 247px;
++    padding-inline: 16px;
++  }
++  .desk {
++    padding-inline: 16px;
++  }
++  .tabs {
++    gap: 4px;
++  }
++  .tabs button {
++    padding-inline: 13px;
++  }
++  .poster-meta {
++    font-size: 9px;
++  }
++}
++@media (prefers-reduced-motion: reduce) {
++  *,
++  *:before,
++  *:after {
++    animation: none !important;
++    transition: none !important;
++    scroll-behavior: auto !important;
++  }
++}
+--- a/tests/e2e-suite.mjs
++++ b/tests/e2e-suite.mjs
+@@ -76,7 +76,7 @@
+       return errors.filter((e) => !consoleNoise.test(e));
+     },
+     fontFailures() {
+-      return failedRequests.filter((u) => /fonts\.(googleapis|gstatic)\.com/.test(u));
++      return failedRequests.filter((u) => /\/fonts\//.test(u));
+     },
+   };
+ }
+@@ -87,7 +87,7 @@
+   return file;
+ };
+ 
+-const browser = await chromium.launch({ headless: true });
++const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined });
+ const env = await createEnv();
+ let animEnv = null;
+ let renderEnv = null;
+@@ -116,7 +116,7 @@
+ 
+   await test("E2E-01", "手机签到页正常加载，无横向溢出与控制台异常", async () => {
+     const h1 = (await mobile.locator("h1").first().innerText()).replace(/\s+/g, "");
+-    assert(h1.includes("在签名墙上") && h1.includes("留下你的名字"), `标题异常: ${h1}`);
++    assert(h1 === "InkField." && (await mobile.locator(".poster-event").innerText()) === "AI Coding Hackathon", `标题异常: ${h1}`);
+     assert(await mobile.locator("input#name").isVisible(), "姓名输入框不可见");
+     assert((await mobile.locator(".font-card").count()) >= 1, "字体卡片未渲染");
+     const overflow = await mobile.evaluate(() => ({
+@@ -131,11 +131,12 @@
+   });
+ 
+   await test("E2E-02", "字体分类选择与字体一致性（预览字体与所选字体映射一致）", async () => {
+-    await mobile.locator(".tabs button", { hasText: "自然手写" }).click();
++    await mobile.locator(".tabs button", { hasText: "手写" }).click();
+     const card = mobile.locator(".font-card", { hasText: "霞鹜文楷" });
+-    assert((await card.count()) === 1, "自然手写分类下未找到霞鹜文楷");
++    assert((await card.count()) === 1, "手写分类下未找到霞鹜文楷");
+     await card.click();
+     await mobile.locator("input#name").fill("林小满");
++    await mobile.waitForFunction(()=>!document.querySelector("button.primary").disabled);
+     const styles = await mobile.evaluate(() => {
+       const preview = document.querySelector(".preview");
+       const selected = document.querySelector(".font-card.selected");
+@@ -160,7 +161,7 @@
+     assert(h1.trim() === name, `成功页姓名 ${h1}`);
+     await waitFor(async () => (await api(env, "/api/state")).data.signatures.length === before + 1, 5000);
+     const st = await api(env, "/api/state");
+-    const row = st.data.signatures.find((s) => s.name === name);
++    const row = st.data.signatures.filter((s) => s.name === name).at(-1);
+     assert(row, "后端未找到签到记录");
+     assert(row.font_id === "lxgw-wenkai", `字体未持久化 ${row.font_id}`);
+     const file = await shot(mobile, "02-sign-success.png");
+--- /dev/null
++++ b/tests/exhibit-controls.mjs
+@@ -0,0 +1,108 @@
++import assert from "node:assert/strict";
++import { readFileSync, writeFileSync } from "node:fs";
++import { join } from "node:path";
++import { chromium } from "playwright";
++import {
++  createEnv,
++  createSignature,
++  api,
++  overlaps,
++  REPORTS,
++} from "./lib/env.mjs";
++const env = await createEnv();
++const browser = await chromium.launch({
++  headless: true,
++  executablePath: process.env.CHROMIUM_PATH || undefined,
++});
++const report = {};
++try {
++  const phone = await browser.newPage({
++    viewport: { width: 390, height: 844 },
++  });
++  const wall = await browser.newPage({
++    viewport: { width: 1920, height: 1080 },
++  });
++  await wall.goto(env.baseUrl + "/wall");
++  await phone.goto(env.baseUrl);
++  await phone.locator("#name").fill("林龘");
++  await phone.waitForSelector(".coverage");
++  report.rareGlyph = await phone.locator(".coverage").innerText();
++  await phone.locator("#name").fill("江安校区十二字符签名压力");
++  await phone.getByRole("button", { name: "确认签到" }).click();
++  await phone.waitForSelector("main.success");
++  const sig = (await api(env, "/api/state")).data.signatures[0];
++  assert.equal(sig.split_at, 6);
++  const token = (
++    await api(env, "/api/admin/login", {
++      method: "POST",
++      body: { password: env.secret },
++    })
++  ).data.token;
++  await wall.waitForSelector(".writing");
++  await wall.waitForTimeout(400);
++  await api(env, "/api/admin/settings", {
++    token,
++    method: "PUT",
++    body: { animationPaused: true },
++  });
++  await wall.waitForTimeout(200);
++  const pixels = () =>
++    wall.locator(".writing canvas").evaluate((c) => c.toDataURL());
++  const start = await pixels();
++  await wall.waitForTimeout(1100);
++  assert.equal(await pixels(), start);
++  await api(env, "/api/admin/settings", {
++    token,
++    method: "PUT",
++    body: { animationPaused: false },
++  });
++  await wall.waitForSelector(".complete", { timeout: 20000 });
++  report.pauseResume = "frozen pixels and resumed completion";
++  const admin = await browser.newPage({ acceptDownloads: true });
++  await admin.goto(env.baseUrl + "/admin");
++  await admin.locator("input[type=password]").fill(env.secret);
++  await admin.getByText("登录后台").click();
++  await admin.waitForSelector(".records article");
++  await admin.getByPlaceholder("搜索姓名").fill("江安");
++  assert.equal(await admin.locator(".records article").count(), 1);
++  const d = admin.waitForEvent("download");
++  await admin.getByRole("button", { name: "导出签到记录" }).click();
++  const savedFile = join(env.dir, "records.csv");
++  await (await d).saveAs(savedFile);
++  const csv = readFileSync(savedFile, "utf8");
++  assert(csv.includes(sig.name) && csv.includes(sig.font_id));
++  report.csv = "name, font ID and UTF-8 BOM verified";
++  assert.equal(csv.charCodeAt(0), 0xfeff);
++  admin.on("dialog", (dlg) => dlg.accept());
++  await admin.locator(".records").getByRole("button", { name: "删除" }).click();
++  await wall.waitForFunction(
++    () => document.querySelectorAll(".signature").length === 0,
++  );
++  const created = await Promise.all(
++    Array.from({ length: 120 }, (_, i) =>
++      createSignature(env, "并发" + String(i).padStart(3, "0")),
++    ),
++  );
++  assert(created.every((r) => r.status === 201));
++  assert.equal(new Set(created.map((r) => r.data.id)).size, 120);
++  assert(
++    !created.some((r, i) =>
++      created.slice(0, i).some((a) => overlaps(a.data, r.data)),
++    ),
++  );
++  report.concurrentPosts = created.length;
++  await admin.getByRole("button", { name: "清空全部签到" }).click();
++  await wall.waitForFunction(
++    () => document.querySelectorAll(".signature").length === 0,
++  );
++  assert.equal((await api(env, "/api/state")).data.signatures.length, 0);
++  report.deleteClear = true;
++  report.pass = true;
++} finally {
++  writeFileSync(
++    join(REPORTS, "exhibit-controls.json"),
++    JSON.stringify(report, null, 2),
++  );
++  await browser.close();
++  await env.dispose();
++}
+--- /dev/null
++++ b/tests/exhibit.mjs
+@@ -0,0 +1,305 @@
++import assert from "node:assert/strict";
++import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
++import { join } from "node:path";
++import { chromium } from "playwright";
++import {
++  createEnv,
++  api,
++  ARTIFACTS,
++  REPORTS,
++  PROJECT_ROOT,
++  pngSize,
++} from "./lib/env.mjs";
++const catalog = JSON.parse(
++  readFileSync(join(PROJECT_ROOT, "src/catalog.json"), "utf8"),
++);
++const report = {
++  fonts: [],
++  layouts: [],
++  errors: [],
++  external: [],
++  animation: {},
++  browser: "",
++};
++mkdirSync(ARTIFACTS, { recursive: true });
++mkdirSync(REPORTS, { recursive: true });
++const env = await createEnv();
++const browser = await chromium.launch({
++  headless: true,
++  executablePath: process.env.CHROMIUM_PATH || undefined,
++});
++report.browser = browser.version();
++const observe = (page) => {
++  page.on("pageerror", (e) => report.errors.push(e.message));
++  page.on("response", (r) => {
++    if (r.status() >= 400)
++      report.errors.push(r.status() + " " + new URL(r.url()).pathname);
++  });
++  page.on("request", (r) => {
++    if (r.url().startsWith("http") && !r.url().startsWith(env.baseUrl))
++      report.external.push(r.url());
++  });
++};
++const shot = (page, name) => page.screenshot({ path: join(ARTIFACTS, name) });
++try {
++  const phone = await browser.newPage({
++    viewport: { width: 390, height: 844 },
++    deviceScaleFactor: 2,
++    isMobile: true,
++    hasTouch: true,
++  });
++  const wall = await browser.newPage({
++    viewport: { width: 1920, height: 1080 },
++  });
++  observe(phone);
++  observe(wall);
++  await wall.goto(env.baseUrl + "/wall");
++  await phone.goto(env.baseUrl);
++  await phone.locator("#name").fill("林知秋");
++  await phone.waitForFunction(
++    () => !document.querySelector(".primary").disabled,
++  );
++  await phone.waitForTimeout(2000);
++  await shot(phone, "mobile-studio.png");
++  await shot(wall, "wall-000.png");
++  const devtools = await phone.context().newCDPSession(phone);
++  await devtools.send("DOM.enable");
++  await devtools.send("CSS.enable");
++  for (const group of new Set(catalog.map((f) => f.group))) {
++    await phone.getByRole("button", { name: group, exact: true }).click();
++    await phone.waitForFunction(
++      () =>
++        getComputedStyle(document.querySelector(".font-card strong"))
++          .visibility === "visible",
++    );
++    const { root } = await devtools.send("DOM.getDocument");
++    const { nodeIds } = await devtools.send("DOM.querySelectorAll", {
++      nodeId: root.nodeId,
++      selector: ".font-card strong",
++    });
++    const faces = catalog.filter((f) => f.group === group);
++    for (const [i, nodeId] of nodeIds.entries()) {
++      const { fonts } = await devtools.send("CSS.getPlatformFontsForNode", {
++        nodeId,
++      });
++      assert(
++        fonts.length && fonts.every((f) => f.isCustomFont),
++        "Local font missing: " + faces[i].id,
++      );
++      const hash = await phone
++        .locator(".font-card strong")
++        .nth(i)
++        .evaluate((el) => {
++          const c = document.createElement("canvas");
++          c.width = 128;
++          c.height = 64;
++          const g = c.getContext("2d");
++          g.font = "48px " + getComputedStyle(el).fontFamily;
++          g.fillText("山川", 0, 52);
++          return c.toDataURL();
++        });
++      const { createHash } = await import("node:crypto");
++      report.fonts.push({
++        id: faces[i].id,
++        platform: fonts.map((f) => ({
++          name: f.postScriptName,
++          glyphs: f.glyphCount,
++        })),
++        raster: createHash("sha256").update(hash).digest("hex"),
++      });
++    }
++  }
++  assert.equal(report.fonts.length, 24);
++  assert.equal(
++    new Set(report.fonts.map((f) => f.raster)).size,
++    24,
++    "Duplicate specimen outline",
++  );
++  await phone.getByRole("button", { name: "笔墨", exact: true }).click();
++  await phone.getByRole("button", { name: "确认签到" }).click();
++  await phone.waitForSelector("main.success");
++  await shot(phone, "mobile-signed.png");
++  await wall.waitForSelector(".signature.writing", { timeout: 15000 });
++  const sample = await wall.evaluate(async () => {
++    const el = document.querySelector(".signature.writing"),
++      c = el.querySelector("canvas"),
++      ctx = c.getContext("2d"),
++      series = [];
++    const start = performance.now();
++    while (performance.now() - start < 2300) {
++      const a = ctx.getImageData(0, 0, c.width, c.height).data;
++      let ink = 0;
++      for (let i = 3; i < a.length; i += 4) if (a[i] > 12) ink++;
++      const b = el.getBoundingClientRect();
++      series.push({ ink, x: b.x, y: b.y });
++      await new Promise((r) => setTimeout(r, 65));
++    }
++    return series;
++  });
++  assert(new Set(sample.map((v) => v.ink)).size > 4, "Missing progressive ink");
++  assert(
++    new Set(sample.map((v) => v.x + "," + v.y)).size === 1,
++    "Animated name moved",
++  );
++  report.animation = {
++    samples: sample.length,
++    inkLevels: new Set(sample.map((v) => v.ink)).size,
++    positions: new Set(sample.map((v) => v.x + "," + v.y)).size,
++  };
++  await wall.waitForSelector(".signature.complete");
++  await shot(wall, "wall-001.png");
++  await wall.emulateMedia({ reducedMotion: "reduce" });
++  const lastNames = [
++    ..."赵钱孙李周吴郑王冯陈沈韩杨朱许何吕张孔曹严华陶姜谢乔苏潘葛范彭陆沈邱顾宋白孟程夏温唐杜",
++  ];
++  const given = [
++    "一禾",
++    "川",
++    "知远",
++    "星野",
++    "宁",
++    "嘉树",
++    "子衿",
++    "怀瑾",
++    "景行",
++    "文溪",
++    "晚晴",
++    "明澈",
++    "彦",
++    "嘉言",
++    "望舒",
++    "初阳",
++    "之恒",
++    "清和",
++    "南山",
++  ];
++  const first = (await api(env, "/api/state")).data.signatures[0];
++  const pinned = new Map([
++    [first.id, [first.x, first.y, first.width, first.height]],
++  ]);
++  let count = 1;
++  for (const goal of [5, 10, 50, 100, 120]) {
++    while (count < goal) {
++      const name =
++        count === 9
++          ? "江安校区十二字符签名压力"
++          : count % 19 === 0
++            ? "Ada " + count
++            : lastNames[count % lastNames.length] + given[count % given.length];
++      const f = catalog[count % catalog.length];
++      await phone.getByRole("button", { name: "继续签到" }).click();
++      await phone.locator("#name").fill(name);
++      await phone.getByRole("button", { name: f.group, exact: true }).click();
++      await phone.locator(".font-card").filter({ hasText: f.label }).click();
++      await phone.getByRole("button", { name: "确认签到" }).click();
++      await phone.waitForSelector("main.success");
++      assert.equal(await phone.locator("main.success h1").innerText(), name);
++      count++;
++    }
++    await wall.waitForFunction(
++      (n) => document.querySelectorAll(".signature.complete").length === n,
++      goal,
++      { timeout: 180000 },
++    );
++    await wall.waitForTimeout(350);
++    const layouts = await wall.locator(".signature").evaluateAll((els) =>
++      els.map((el) => {
++        const r = el.getBoundingClientRect(),
++          c = el.querySelector("canvas"),
++          a = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
++        return {
++          id: el.dataset.id,
++          x: r.x,
++          y: r.y,
++          w: r.width,
++          h: r.height,
++          ink: a.some((v, i) => i % 4 === 3 && v > 100),
++        };
++      }),
++    );
++    let overlaps = 0,
++      clipped = 0,
++      moved = 0;
++    for (const [i, b] of layouts.entries()) {
++      assert(b.ink, "Blank canvas at " + goal);
++      if (b.x < 0 || b.y < 0 || b.x + b.w > 1920.01 || b.y + b.h > 1080.01)
++        clipped++;
++      for (const a of layouts.slice(0, i))
++        if (
++          a.x < b.x + b.w &&
++          a.x + a.w > b.x &&
++          a.y < b.y + b.h &&
++          a.y + a.h > b.y
++        )
++          overlaps++;
++      const prev = pinned.get(b.id),
++        next = [b.x, b.y, b.w, b.h];
++      if (prev?.some((v, i) => Math.abs(v - next[i]) > 0.03)) moved++;
++      pinned.set(b.id, next);
++    }
++    assert.equal(overlaps + clipped + moved, 0);
++    const sizes = (await api(env, "/api/state")).data.signatures
++      .map((s) => s.size)
++      .sort((a, b) => a - b);
++    report.layouts.push({
++      count: goal,
++      overlaps,
++      clipped,
++      moved,
++      visibleInk: layouts.length,
++      minSize: sizes[0],
++      medianSize: sizes[Math.floor(goal / 2)],
++      maxSize: sizes.at(-1),
++    });
++    await shot(wall, "wall-" + String(goal).padStart(3, "0") + ".png");
++    console.log("wall", goal, "ok");
++  }
++  const admin = await browser.newPage({
++    viewport: { width: 1440, height: 900 },
++  });
++  observe(admin);
++  await admin.goto(env.baseUrl + "/admin");
++  await admin.locator("input[type=password]").fill(env.secret);
++  await admin.getByText("登录后台").click();
++  await admin.waitForSelector(".admin");
++  await shot(admin, "admin-console.png");
++  const download = admin.waitForEvent("download", { timeout: 60000 });
++  await admin.getByRole("button", { name: "导出 4K 纪念图" }).click();
++  const file = join(ARTIFACTS, "ink-field-4k.png");
++  await (await download).saveAs(file);
++  report.export = pngSize(readFileSync(file));
++  assert.deepEqual(report.export, { width: 3840, height: 2160 });
++  await phone.goto(env.baseUrl);
++  await phone.setViewportSize({ width: 320, height: 720 });
++  assert(
++    await phone.evaluate(
++      () => document.documentElement.scrollWidth <= innerWidth,
++    ),
++  );
++  report.mobileWidths = [320, 390];
++  assert.deepEqual(report.errors, []);
++  assert.deepEqual(report.external, []);
++  const perf = await wall.context().newCDPSession(wall);
++  await perf.send("Performance.enable");
++  const measure = async () =>
++    Object.fromEntries(
++      (await perf.send("Performance.getMetrics")).metrics.map((m) => [
++        m.name,
++        m.value,
++      ]),
++    );
++  const before = await measure();
++  await wall.waitForTimeout(30000);
++  const after = await measure();
++  report.idle = {
++    seconds: 30,
++    taskSeconds: after.TaskDuration - before.TaskDuration,
++    layouts: after.LayoutCount - before.LayoutCount,
++    heapMiB: after.JSHeapUsedSize / 2 ** 20,
++  };
++  report.pass = true;
++} finally {
++  writeFileSync(join(REPORTS, "exhibit.json"), JSON.stringify(report, null, 2));
++  await browser.close();
++  await env.dispose();
++}
+--- a/tests/lib/env.mjs
++++ b/tests/lib/env.mjs
+@@ -39,7 +39,10 @@
+   cpSync(join(PROJECT_ROOT, "server"), join(dir, "server"), { recursive: true });
+   cpSync(join(PROJECT_ROOT, "package.json"), join(dir, "package.json"));
+   const dist = join(PROJECT_ROOT, "dist");
+-  if (existsSync(dist)) cpSync(dist, join(dir, "dist"), { recursive: true });
++  if (existsSync(dist)) {
++    try { symlinkSync(dist,join(dir,"dist"),"junction"); }
++    catch { cpSync(dist,join(dir,"dist"),{recursive:true}); }
++  }
+   mkdirSync(join(dir, "data"), { recursive: true });
+   try {
+     symlinkSync(join(PROJECT_ROOT, "node_modules"), join(dir, "node_modules"), "junction");
+@@ -50,9 +53,9 @@
+ }
+ 
+ export function startServer(dir, port, secret) {
+-  const child = spawn(process.execPath, [TSX_CLI, join(dir, "server", "index.ts")], {
++  const child = spawn(process.execPath, ["--import", "tsx", join(dir, "server", "index.ts")], {
+     cwd: dir,
+-    env: { ...process.env, PORT: String(port), ADMIN_SECRET: secret, NODE_ENV: "test" },
++    env: { ...process.env, HOST: "127.0.0.1", SIGNATURE_DATA_DIR: join(dir,"data"), PORT: String(port), ADMIN_SECRET: secret, NODE_ENV: "test" },
+     stdio: ["ignore", "pipe", "pipe"],
+     windowsHide: true,
+   });
+--- a/tsconfig.node.json
++++ b/tsconfig.node.json
+@@ -1 +1,16 @@
+-{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","esModuleInterop":true,"strict":true,"skipLibCheck":true,"outDir":"build"},"include":["server","vite.config.ts"]}
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "module": "NodeNext",
++    "moduleResolution": "NodeNext",
++    "esModuleInterop": true,
++    "strict": true,
++    "skipLibCheck": true,
++    "outDir": "build",
++    "noEmit": true
++  },
++  "include": [
++    "server",
++    "vite.config.ts"
++  ]
++}
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,3 +1,15 @@
+-import {defineConfig} from 'vite';
+-import react from '@vitejs/plugin-react';
+-export default defineConfig({plugins:[react()],server:{port:5173,proxy:{'/api':'http://localhost:8787','/ws':{target:'ws://localhost:8787',ws:true}}},build:{outDir:'dist'}});
++import { defineConfig } from "vite";
++import react from "@vitejs/plugin-react";
++const port = process.env.PORT || "8787";
++export default defineConfig({
++  plugins: [react()],
++  server: {
++    host: process.env.HOST || "0.0.0.0",
++    port: 5173,
++    proxy: {
++      "/api": `http://127.0.0.1:${port}`,
++      "/ws": { target: `ws://127.0.0.1:${port}`, ws: true },
++    },
++  },
++  build: { outDir: "dist" },
++});
