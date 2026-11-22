@@ -1,0 +1,46 @@
+﻿# Node.js 依赖
+node_modules/
+
+# 构建产物
+dist/
+build/
+coverage/
+.cache/
+.vite/
+
+# 测试产物
+playwright-report/
+test-results/
+tests/artifacts/
+tests/reports/
+
+# 环境变量及密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SQLite 数据库及真实签到数据
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# 日志与临时文件
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Python 虚拟环境
+.venv/
+__pycache__/
+
+# 编辑器本地配置
+.vscode/
+.idea/
