@@ -115,11 +115,13 @@ export function drawName(
       : [chars];
   const progressInChars = progress * chars.length;
   let offset = 0;
-  const palette = ["#f4eee7", "#f2c4ba", "#d8c9ff", "#e6e2f0", "#edc9a9"];
+  const palette = ["#302d23", "#514232", "#443a2d", "#39392c", "#594338"];
   ctx.fillStyle =
-    palette[
-      [...s.id].reduce((v, c) => v + c.charCodeAt(0), 0) % palette.length
-    ];
+    s.status === "writing"
+      ? "#983a26"
+      : palette[
+          [...s.id].reduce((v, c) => v + c.charCodeAt(0), 0) % palette.length
+        ];
   lines.forEach((line, row) => {
     const glyphs = line.map((c) => ctx.measureText(c)),
       advance = glyphs.reduce((v, m) => v + m.width, 0);

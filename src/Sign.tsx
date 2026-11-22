@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { catalog, family, loadFace } from "./fonts";
 import { api, type Sig, useLive } from "./live";
-import { Poster, Seal } from "./Poster";
+import { Imprint } from "./Folio";
 import { InkCanvas } from "./InkCanvas";
 const groups = [...new Set(catalog.map((f) => f.group))];
 const arrow = (
@@ -154,11 +154,10 @@ export function Sign() {
       <main className="success">
         <section className="receipt">
           <div className="receipt-top">
-            <Seal />
-            <span className="micro">INK FIELD / 墨场</span>
+            <Imprint />
           </div>
           <div className="receipt-status">
-            <i /> 签到已确认
+            <i /> 数字签名已提交
           </div>
           <h1 style={{ fontFamily: family(done.font_id) }}>{done.name}</h1>
           <p>抬头看大屏，你的名字将在这里落笔。</p>
@@ -174,11 +173,7 @@ export function Sign() {
               </dd>
             </div>
           </dl>
-          <p className="receipt-event">
-            TRAE on Campus @四川大学
-            <br />
-            AI Coding Hackathon
-          </p>
+          <p className="receipt-event">{state.eventName}</p>
           <button
             className="primary"
             onClick={() => {
@@ -187,29 +182,35 @@ export function Sign() {
               setName("");
             }}
           >
-            继续签到 {arrow}
+            继续署名 {arrow}
           </button>
+          <a className="back-link" href="/">
+            返回活动入口
+          </a>
         </section>
       </main>
     );
   return (
     <main className="studio">
-      <Poster count={state.signatures.length} />
+      <header className="studio-head">
+        <Imprint />
+        <a className="back-link" href="/">
+          返回活动入口
+        </a>
+      </header>
       <form className="desk" onSubmit={submit}>
         <div className="desk-top">
-          <span className="micro">SIGNATURE STUDIO</span>
+          <span className="micro">STEP 02 — LEAVE YOUR MARK</span>
           <span className="live-pill">
             <i />
             {!state.online
               ? "连接中"
               : state.eventStatus === "open"
-                ? "签到开放"
-                : "签到暂停"}
+                ? "署名开放"
+                : "署名暂停"}
           </span>
         </div>
-        <h2>
-          创作你的签名<span>.</span>
-        </h2>
+        <h1>留下你的名字</h1>
         <div className="name-label">
           <label htmlFor="name">姓名或昵称</label>
           <span className="micro">{[...name].length} / 12</span>
@@ -304,10 +305,10 @@ export function Sign() {
           {!state.online
             ? "正在连接"
             : state.eventStatus !== "open"
-              ? "签到暂未开放"
+              ? "署名暂未开放"
               : busy
                 ? "正在落款…"
-                : "确认签到"}
+                : "确认签名"}
           {arrow}
         </button>
       </form>

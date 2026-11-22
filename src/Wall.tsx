@@ -76,7 +76,7 @@ export function Wall() {
       if (active) drawBoard(ctx, state, state.online, signUrl());
     };
     let frame = 0;
-    prepareBoard()
+    prepareBoard(state.eventName)
       .then(() => {
         if (active) frame = requestAnimationFrame(draw);
       })
@@ -90,7 +90,14 @@ export function Wall() {
       active = false;
       cancelAnimationFrame(frame);
     };
-  }, [count, state.online, state.eventStatus, state.animationPaused, retry]);
+  }, [
+    count,
+    state.eventName,
+    state.online,
+    state.eventStatus,
+    state.animationPaused,
+    retry,
+  ]);
   const next = state.signatures.find((s) => s.status !== "complete");
   useEffect(() => {
     if (
@@ -156,12 +163,12 @@ export function Wall() {
           width="1920"
           height="1080"
           ref={ref}
-          aria-label="墨场 · TRAE on Campus @四川大学 · AI Coding Hackathon"
+          aria-label="墨场现场题名录"
         />
         <div className="wall-count sr-only">
           <strong>{count}</strong> 人已署名
         </div>
-        <a className="qr-link" href={signUrl()} aria-label="手机扫码签到" />
+        <a className="qr-link" href={signUrl()} aria-label="打开统一活动入口" />
         {state.signatures.map((s) => (
           <Name
             key={s.id}

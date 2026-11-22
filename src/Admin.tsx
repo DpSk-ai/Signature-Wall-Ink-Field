@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, useLive, type Sig } from "./live";
 import { family, fontRows, loadFace } from "./fonts";
 import { exportBoard } from "./board";
-import { Seal } from "./Poster";
+import { Imprint } from "./Folio";
+import { CheckInSettings } from "./CheckInSettings";
 export function Admin() {
   const state = useLive(),
     [token, setToken] = useState(sessionStorage.getItem("admin-token") || ""),
@@ -59,37 +60,37 @@ export function Admin() {
   if (!token)
     return (
       <main className="admin-login">
-        <p className="eyebrow">
-          <Seal /> INK FIELD / 墨场
-        </p>
-        <h1>管理签到墙</h1>
-        <label>
-          管理员密码
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        {message && <p className="error">{message}</p>}
-        <button
-          className="primary"
-          onClick={async () => {
-            try {
-              const d = await api("/api/admin/login", {
-                method: "POST",
-                body: JSON.stringify({ password }),
-              });
-              sessionStorage.setItem("admin-token", d.token);
-              setMessage("");
-              setToken(d.token);
-            } catch (e) {
-              setMessage((e as Error).message);
-            }
-          }}
-        >
-          登录后台
-        </button>
+        <section className="login-card">
+          <Imprint />
+          <h1>管理署名墙</h1>
+          <label>
+            管理员密码
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {message && <p className="error">{message}</p>}
+          <button
+            className="primary"
+            onClick={async () => {
+              try {
+                const d = await api("/api/admin/login", {
+                  method: "POST",
+                  body: JSON.stringify({ password }),
+                });
+                sessionStorage.setItem("admin-token", d.token);
+                setMessage("");
+                setToken(d.token);
+              } catch (e) {
+                setMessage((e as Error).message);
+              }
+            }}
+          >
+            登录后台
+          </button>
+        </section>
       </main>
     );
   const settings = (data: object) =>
@@ -111,7 +112,7 @@ export function Admin() {
         headers: { authorization: `Bearer ${token}` },
       });
       const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-      const head = ["姓名", "字体", "字体ID", "状态", "签到时间"].map(esc);
+      const head = ["姓名", "字体", "字体ID", "状态", "署名时间"].map(esc);
       const rows = all.map((s) =>
         [
           s.name,
@@ -136,41 +137,39 @@ export function Admin() {
     <main className="admin">
       <header>
         <div>
-          <p className="eyebrow">
-            <Seal /> INK FIELD / 墨场
-          </p>
+          <Imprint />
           <h1>现场控制台</h1>
         </div>
         <div className="header-actions">
           <a href="/wall" target="_blank">
             打开大屏
           </a>
-          <button onClick={exportCsv}>导出签到记录</button>
+          <button onClick={exportCsv}>导出署名记录</button>
           <button disabled={exporting || !state.online} onClick={export4k}>
             {exporting ? "正在生成 4K 图…" : "导出 4K 纪念图"}
           </button>
         </div>
       </header>
       <section className="admin-section">
-        <h2>活动管理</h2>
+        <h2>墨场署名管理</h2>
         <p className="admin-state">
           <i /> {state.online ? "实时连接" : "重新连接中"} ·{" "}
           {state.eventStatus === "open"
-            ? "签到开放"
+            ? "署名开放"
             : state.eventStatus === "ended"
-              ? "签到结束"
-              : "签到暂停"}{" "}
+              ? "署名结束"
+              : "署名暂停"}{" "}
           · {state.animationPaused ? "动画暂停" : "动画开启"}
         </p>
         <div className="controls">
           <button onClick={() => settings({ eventStatus: "open" })}>
-            开启签到
+            开启署名
           </button>
           <button onClick={() => settings({ eventStatus: "paused" })}>
-            暂停签到
+            暂停署名
           </button>
           <button onClick={() => settings({ eventStatus: "ended" })}>
-            结束签到
+            结束署名
           </button>
           <button
             onClick={() =>
@@ -184,11 +183,11 @@ export function Admin() {
           </button>
           <button
             onClick={() => {
-              if (window.confirm("确认清空全部签到数据？此操作不可恢复。"))
+              if (window.confirm("确认清空全部署名数据？此操作不可恢复。"))
                 call("/api/admin/signatures", { method: "DELETE" });
             }}
           >
-            清空全部签到
+            清空全部署名
           </button>
           <span>
             {state.signatures.length} 人在墙 · {hiddenList.length} 已隐藏 ·{" "}
@@ -196,9 +195,10 @@ export function Admin() {
           </span>
         </div>
       </section>
+      <CheckInSettings token={token} />
       <section className="admin-section">
         <div className="section-head">
-          <h2>签到记录</h2>
+          <h2>署名记录</h2>
           <div className="section-actions">
             <input
               value={query}
@@ -211,7 +211,7 @@ export function Admin() {
           </div>
         </div>
         <div className="records">
-          {!state.signatures.length && !showHidden && <p>还没有公开签到记录</p>}
+          {!state.signatures.length && !showHidden && <p>还没有公开署名记录</p>}
           {(showHidden
             ? [
                 ...state.signatures,

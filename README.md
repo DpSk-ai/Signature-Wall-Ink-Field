@@ -1,6 +1,21 @@
 # 墨场 Ink Field · Signature Wall
 
-TRAE on Campus @四川大学 · AI Coding Hackathon 的实时互动签到墙。手机选字签名，大屏以参与者选中的字形原位书写，管理页控制活动并导出 4K 合影。
+折页手札风格的实时互动签名墙。微信扫描大屏统一活动码，先进入墨场欢迎页，再前往学校二课签到或留下数字签名。手机、大屏和管理后台使用同一套纸色、墨线与朱印。
+
+## 配置学校二课入口
+
+在 `/admin` 登录，打开「学校二课入口」，选择一种方式并保存。大屏二维码始终指向本场墨场的 `/`，主办方更换学校链接时无需重印统一码。
+
+| 主办方材料 | 后台选择 | 参与者看到的入口 |
+|---|---|---|
+| 可在微信网页打开的官方 HTTPS 地址 | 官方 HTTPS 链接 | 点击「前往二课签到」，在当前窗口打开学校页面 |
+| 学校生成的 PNG 或 JPEG 二维码 | 从二维码识别链接 | 识别出 HTTPS 后使用完整地址，并保留二维码备用；其他内容直接展示原码 |
+| 专用协议、动态码，或学校要求从原码进入 | 仅展示官方二维码 | 长按识别或保存后，使用学校支持的方式扫码 |
+| 尚未收到学校入口 | 暂不发布 | 欢迎页说明当前状态，第二步仍可进入 |
+
+上传前可裁掉照片中与活动无关的部分，保留二维码及白边。链接、参数和原码只在运行时由管理员配置，存入活动 SQLite 库中的独立表。请勿将它们放入源码、截图、提交或公开问题。参与者打开入口时会收到本场配置的链接或二维码。
+
+学校页面自行处理登录和签到。使用微信的返回操作可回到墨场，点击「留下你的名字」进入 `/sign`。墨场仅提示是否打开过学校入口，数字签名可以独立提交。墨场的暂停、回执、记录与导出都只针对数字署名。
 
 ## Windows 11 启动
 
@@ -25,9 +40,9 @@ npm.cmd start
 
 ### 数据与升级
 
-默认使用 `data/signature-wall.db`。包内数据库来自附件中已提交的 WAL 页，保留了其中 5 条记录及原坐标。测试产生的参与者仅存在于验收截图和隔离测试库。需要全新场次时，可在启动前给 `$env:SIGNATURE_DATA_DIR` 设置一个新的空目录，例如 `C:\Events\SCU-Live-Data`。后续启动始终指向同一目录。
+默认使用 `data/signature-wall.db`。仓库默认忽略运行时数据目录。测试使用临时数据库及虚构署名。需要全新场次时，可在启动前给 `$env:SIGNATURE_DATA_DIR` 设置一个新的空目录，例如 `C:\Events\SCU-Live-Data`。后续启动始终指向同一目录。
 
-迁移已有部署时，先停止该实例，完整备份原 `data` 目录（含存在的 WAL 与 SHM），将 `SIGNATURE_DATA_DIR` 指向备份副本进行核对。首次启动会按需添加两行署名的断行字段。保留姓名、字体 ID、可见性、状态、时间和坐标。后台“清空全部签到”会删除当前数据库的记录。
+迁移已有部署时，先停止该实例，完整备份原 `data` 目录（含存在的 WAL 与 SHM），将 `SIGNATURE_DATA_DIR` 指向备份副本进行核对。首次启动会按需添加两行署名的断行字段。保留姓名、字体 ID、可见性、状态、时间和坐标。后台“清空全部署名”会删除当前数据库的记录。
 
 ### 开发与复测
 
@@ -44,6 +59,7 @@ npm.cmd test
 npm.cmd run test:api
 npm.cmd run test:backend
 npx.cmd playwright install chromium
+npm.cmd run test:check-in
 npm.cmd run test:e2e
 npm.cmd run test:exhibit
 node tests/exhibit-controls.mjs
@@ -62,8 +78,9 @@ node tests/exhibit-controls.mjs
 
 | 内容 | 路径 |
 |---|---|
-| 视觉探索与设计规范 | `docs/DESIGN.md` |
+| 当前折页手札与统一入口 | 本文「配置学校二课入口」、`src/Welcome.tsx`、`src/board.ts` |
+| 上一版展场视觉的设计档案 | `docs/DESIGN.md` |
 | 字体授权、覆盖、来源和散列 | `docs/FONTS.md`、`docs/font-ledger.json`、`public/fonts/<id>/` |
-| 测试方法、失败修复与结果 | `docs/ACCEPTANCE.md`、`tests/reports/` |
+| 当前验收结果（运行测试后生成） | `tests/reports/`；二课流程见 `tests/check-in.mjs` |
 | 手机与各密度大屏截图、4K 实际导出 | `tests/artifacts/` |
-| 代码差异与完整文件变更表 | `docs/CHANGES.md`、`docs/source.patch`、`docs/changed-files.tsv` |
+| 上一版本的交付档案 | `docs/CHANGES.md`、`docs/source.patch`、`docs/changed-files.tsv` |
